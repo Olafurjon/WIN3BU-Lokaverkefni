@@ -7,3 +7,4 @@ Lokaverkefni Fyrir WIN3BU Powershell áfangi þar sem manni er kynnt fyrir að n
 
 # Staða
 11/4/17 - Byrjað á því að  huga að útlitinu á GUIinu og hægt og rólega byggja það upp
+14/4/17 - Virkni fyrir fyrsta tab og uppsetningu klárað byrjað að huga að útliti og virkni fyrir dhcp uppsetningu
