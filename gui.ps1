@@ -50,6 +50,16 @@ return $textbox
 
 }
 
+function villapopup{
+param(
+[Parameter(Mandatory)]
+$message
+
+)
+$wshell = New-Object -ComObject Wscript.Shell
+
+$wshell.Popup($message)}
+
 #region netkortsform
 $Script:netselectedindex = 0
 function netformtextupdate{
@@ -315,8 +325,6 @@ foreach($item in $ctrlnetform)
 #endregion
 
 
-
-
 #region byrjun
 $ctrlsmainform = @()
 
@@ -328,7 +336,7 @@ $ctrlstabpage2 = @()
 #Mainform - þetta er aðalformið sem opnast
 $mainform = New-Object System.Windows.Forms.Form
 $mainform.StartPosition = "CenterScreen"
-$mainform.ClientSize = New-Object System.Drawing.Size(1366,768)
+$mainform.ClientSize = New-Object System.Drawing.Size(250,500)
 
 
 
@@ -341,7 +349,7 @@ $tabcontrol.ClientSize = $mainform.ClientSize
 $tabcontrol.Visible = $true
 $ctrlsmainform += $tabcontrol
 
-#endregion
+
 
 
 
@@ -352,24 +360,168 @@ $tab1tbnnetkort.Add_Click({$mainform.Hide()
 $netform.ShowDialog()
 })
 $ctrlstabpage1 += $tab1tbnnetkort
+#endregion
+
+#tooltips
+$tooltipcontrol = New-Object System.Windows.Forms.ToolTip 
+$tooltipcontrol.SetToolTip($tab1tbnnetkort,"Breyttu Netkortsupplýsingum")
+$tooltipcontrol.SetToolTip($tab1lbldomname,"Sláðu inn domain nafnið, .local er bætt við sjálfkrara")
+$tooltipcontrol.SetToolTip($tab1btndomain,"Búa til domainið")
+$tooltipcontrol.SetToolTip($tab2txtscopenafn,"Má vera hvað sem ver")
+$tooltipcontrol.SetToolTip($tab2txtscopestart,"t.d. 192.168.1.50")
+$tooltipcontrol.SetToolTip($tab2txtscopeend,"t.d. 192.168.1.150")
+$tooltipcontrol.SetToolTip($tab2txtsubmask,"t.d 255.255.255.2")
+$tooltipcontrol.SetToolTip($tab2txtdns,"Hver á að vera 'routerinn'")
 
 
+#region tab1
+#RichTexBox í tab1
+$rtbtab1 = New-Object System.Windows.Forms.RichTextBox
+$rtbtab1.ReadOnly = $true
+$rtbtab1.Text = "Byrjað er á að því að setja inn domain nafnið hér að neðan og svo smellt á takkann, eftir það endurræsir vélin sig þegar hún er búinn að setja upp domainið"
+$rtbtab1.Location = New-Object System.Drawing.Size(9,100)
+$rtbtab1.Size = New-Object System.Drawing.Size(200,100)
+$rtbtab1.BackColor = "White"
+$ctrlstabpage1 += $rtbtab1
 
 #Labelar í tab1
 $tab1lblnetkort = Labelmaker -text "Breyta Netkortum" -location (9,27)
 $ctrlstabpage1 += $tab1lblnetkort
 
+$tab1lbldomname = Labelmaker -text "Nafn á Domaini" -location (2,240)
+$ctrlstabpage1 += $tab1lbldomname
+
+$tab1lblsafeadminpass = Labelmaker -text "SafeMode Admin Pass" -location (-30,300)
+$tab1lblsafeadminpass.ImageKey = "*"
+$tab1lblsafeadminpass.Size = New-Object System.Drawing.Size(200,20)
+$ctrlstabpage1 += $tab1lblsafeadminpass
+
+#Textbox í tab1
+$tab1tbdomain = tbmaker -size (200,20) -location (9,270)
+$ctrlstabpage1 += $tab1tbdomain
+
+$tab1safeadminpass = tbmaker -size (200,20) -location (9,320)
+$ctrlstabpage1 += $tab1safeadminpass
+
+#Button i tab1
+$tab1btndomain = buttonmaker -text "Staðfesta" -location (9,350)
+$tab1btndomain.add_Click({
+
+    if($tab1tbdomain.Text.Length -eq 0)
+    {
+        $msg = villapopup -message "Domain nafnið má ekki vera tómt"
+        
+        
+    }
+    elseif($tab1tbdomain.Text -contains ".local"){
+        $msg = villapopup -message ".local viðbótin kemur sjálfkrafa"
+    }
+    else
+    {
+    
+    $domain = $tab1tbdomain.Text
+    $local = ".local" 
+    $domainlocal = $domain+$local
+    $pass = $tab1safeadminpass.Text
+   
+    $a = New-Object -ComObject Wscript.Shell
+    $svar = $a.popup("Búa til domainið $domainlocal ?",0,"Staðfesta",4)}
+
+    if($svar -eq 6){
+        $error.Clear()
+        try {
+
+            Install-WindowsFeature -Name AD-Domain-Services –IncludeManagementTools
+            Install-ADDSForest –DomainName $domainlocal –InstallDNS -SafeModeAdministratorPassword (ConvertTo-SecureString -AsPlainText "$pass" -Force) 
+            }
+        catch {$error, "Vandamál kom upp" }
+            if (!$error) {
+            $wshell = New-Object -ComObject Wscript.Shell
+            $wshell.Popup("Aðgerð Tókst, Vél mun endurræsa sig",0,"Okei",0x1)
+
+            }
+    }
+
+})
+
+$ctrlstabpage1 += $tab1btndomain
+
+
+
 #tabpage1 - Fyrsti tabinn í forminu
 $tabpage1 = New-Object System.Windows.Forms.TabPage
+$tabpage1.add_Enter({$mainform.ClientSize = New-Object System.Drawing.Size(230,500)
+$tabcontrol.ClientSize = $mainform.ClientSize})
 $tabpage1.Text = "Uppsetning"
+
 foreach($item in $ctrlstabpage1){
 $tabpage1.Controls.Add($item)
 }
 $tabpages += $tabpage1
 
+#endregion tabpage1
+
 #tabpage2 - Seinni tabinn í ævintýrinu
 $tabpage2 = New-Object System.Windows.Forms.TabPage
-$tabpage2.Text = "TBA"
+$tabpage2.Text = "Búa til DHCP Scope"
+$tabpage2.add_Enter({$mainform.ClientSize = New-Object System.Drawing.Size(230,500)
+$tabcontrol.ClientSize = $mainform.ClientSize
+})
+
+
+#label í tab 2
+$texttalign = "MiddleCenter"
+$tab2lblscopenafn = labelmaker -text "Nafn á DHCP Scopei" -location (9,20)
+$tab2lblscopenafn.Size = New-Object System.Drawing.Size(200,20)
+$tab2lblscopenafn.TextAlign = $texttalign
+$ctrlstabpage2 += $tab2lblscopenafn
+
+$tab2lblscopestart = labelmaker -text "Hvaða iptölu á scope-ið að byrja" -location (9,100)
+$tab2lblscopestart.Size = New-Object System.Drawing.Size(200,20)
+$tab2lblscopestart.TextAlign = $texttalign
+$ctrlstabpage2 += $tab2lblscopestart
+
+$tab2lblscopeend = labelmaker -text "Hvaða iptölu á scope-ið að enda" -location (9,180)
+$tab2lblscopeend.Size = New-Object System.Drawing.Size(200,20)
+$tab2lblscopeend.TextAlign = $texttalign
+$ctrlstabpage2 += $tab2lblscopeend
+
+$tab2lblsubnetmsk = labelmaker -text "Hvaða subnet mask" -location (9,260)
+$tab2lblsubnetmsk.Size = New-Object System.Drawing.Size(200,20)
+$tab2lblsubnetmsk.TextAlign = $texttalign
+$ctrlstabpage2 += $tab2lblsubnetmsk
+
+$tab2lbldns = labelmaker -text "DNS Server" -location (9,340)
+$tab2lbldns.Size = New-Object System.Drawing.Size(200,20)
+$tab2lbldns.TextAlign = $texttalign
+$ctrlstabpage2 += $tab2lbldns
+
+#textbox í tab2
+$tab2txtscopenafn = tbmaker -size (200,20) -location (9,50)
+$ctrlstabpage2 += $tab2txtscopenafn
+
+$tab2txtscopestart = tbmaker -size (200,20) -location (9,130)
+$ctrlstabpage2 += $tab2txtscopestart
+
+$tab2txtscopeend = tbmaker -size (200,20) -location (9,210)
+$ctrlstabpage2 += $tab2txtscopeend
+
+$tab2txtsubmask = tbmaker -size (200,20) -location (9,290)
+$ctrlstabpage2 += $tab2txtsubmask
+
+$tab2txtdns = tbmaker -size (200,20) -location (9,370)
+$ctrlstabpage2 += $tab2txtdns
+
+#button í tab 2
+$tab2btnscope = buttonmaker -text "Staðfesta" -location (9,400)
+$ctrlstabpage2 += $tab2btnscope
+
+
+
+
+#region tab2
+
+
 foreach($item in $ctrlstabpage2){
 $tabpage2.Controls.Add($item)
 }
@@ -379,9 +531,10 @@ foreach($tab in $tabpages)
 {
 $tabcontrol.Controls.Add($tab)
 }
-
+#endregion tab2
 
 
 #Byrjum þetta
 $mainform.controls.Add($tabcontrol)
 $mainform.ShowDialog()
+$mainform.add_Closed({$mainform.Close()})
