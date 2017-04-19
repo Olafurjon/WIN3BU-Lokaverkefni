@@ -1,4 +1,12 @@
-﻿
+﻿Add-Type -AssemblyName System.Windows.Forms
+
+
+#set þetta hér því af einhverri ástæðu festist þetta í 10% ef ég var með þetta innaní forminu
+$dhcp = Get-WindowsFeature -Name DHCP 
+if($dhcp.Installed -eq $false)
+{
+Install-WindowsFeature –Name DHCP –IncludeManagementTools
+}
 
 #býr til label með staðsettum texta og staðsetningu
 function labelmaker{
@@ -60,6 +68,43 @@ $wshell = New-Object -ComObject Wscript.Shell
 
 $wshell.Popup($message)}
 
+#region mainform og tabcontrol
+$ctrlsmainform = @()
+$tabpages = @()
+$ctrlstabpage1 = @()
+$ctrlstabpage2 = @()
+$ctrlstabpage3 = @()
+
+
+#Mainform - þetta er aðalformið sem opnast
+$mainform = New-Object System.Windows.Forms.Form
+$mainform.StartPosition = "CenterScreen"
+$mainform.ClientSize = New-Object System.Drawing.Size(250,500)
+
+
+
+#Tabcontrol - Unitið sem meðhondlar stjórnunina á tabs, læt það vera jafnstórt og mainformið
+$tabcontrol = New-Object System.Windows.Forms.TabControl
+$tabcontrol.Location.X = -1
+$tabcontrol.Location.Y = 0
+$tabcontrol.Margin.All = 3
+$tabcontrol.ClientSize = $mainform.ClientSize
+$tabcontrol.Visible = $true
+$ctrlsmainform += $tabcontrol
+
+#endregion mainform og tabcontrol
+
+
+#region tab1
+
+#þegar ein hurð lokast opnast önnur...
+$tab1tbnnetkort = buttonmaker -text "Opna Netkort" -location (9,50)
+$tab1tbnnetkort.Size =  New-Object System.Drawing.Size(120,25)
+$tab1tbnnetkort.Add_Click({$mainform.Hide()
+$netform.ShowDialog()
+})
+$ctrlstabpage1 += $tab1tbnnetkort
+
 #region netkortsform
 $Script:netselectedindex = 0
 function netformtextupdate{
@@ -68,6 +113,7 @@ function netformtextupdate{
     $prefix = Get-NetIPAddress | Where-Object interfaceIndex -EQ $info.InterfaceIndex | Select-Object PrefixLength
 
     $netformIAinfo.Text = $info.InterfaceAlias
+    $netformIP4info.Text = ""
     $netformIP4info.Text = $info.IPv4Address
     if($info.IPv6Address.Count -eq 0){
         $netformIP6info.Text =  "Not Connected"
@@ -121,7 +167,7 @@ catch{
     $message += "Ekki var hægt að skýra Netkortið"
 }
 try{
-    New-NetIPAddress -InterfaceAlias $nyjanetkort -IPAddress $ipaddress -PrefixLength $prefix -ErrorAction - #-DefaultGateway 192.168.1.1 notum ekki default gateway en hægt að kommenta þetta aftur inn ef þess þarf
+    New-NetIPAddress -InterfaceAlias $nyjanetkort -IPAddress $ipaddress -PrefixLength $prefix #-DefaultGateway 192.168.1.1 notum ekki default gateway en hægt að kommenta þetta aftur inn ef þess þarf
     $message += "Upplýsingar $nyjanetkort , Ip: $ipaddress , Prefix: $prefix"
 }
 catch{
@@ -133,6 +179,9 @@ $message += "DNS server $nyjanetkort = $dnsserver"
 }
 catch{
 $message+= "Ekki tókst að breyta DNS server"
+}
+finally{
+write-host $message
 }
 $combo.Items.Clear()
 $allnets = Get-NetIPConfiguration -Detailed
@@ -203,7 +252,6 @@ $combo.SelectedIndex = 0
 $combo.Location = New-Object System.Drawing.Point(285, 25)
 $Script:selectednetkort[$combo.SelectedIndex].InterfaceAlias
 $combo.add_SelectedIndexChanged({
-Write-Host $Script:selectednetkort[$combo.SelectedIndex].InterfaceAlias
 netformtextupdate})
 $ctrlnetform += $combo
 #textbox fyrir netform
@@ -323,58 +371,6 @@ foreach($item in $ctrlnetform)
 
 
 #endregion
-
-
-#region byrjun
-$ctrlsmainform = @()
-
-$tabpages = @()
-$ctrlstabpage1 = @()
-$ctrlstabpage2 = @()
-
-
-#Mainform - þetta er aðalformið sem opnast
-$mainform = New-Object System.Windows.Forms.Form
-$mainform.StartPosition = "CenterScreen"
-$mainform.ClientSize = New-Object System.Drawing.Size(250,500)
-
-
-
-#Tabcontrol - Unitið sem meðhondlar stjórnunina á tabs, læt það vera jafnstórt og mainformið
-$tabcontrol = New-Object System.Windows.Forms.TabControl
-$tabcontrol.Location.X = -1
-$tabcontrol.Location.Y = 0
-$tabcontrol.Margin.All = 3
-$tabcontrol.ClientSize = $mainform.ClientSize
-$tabcontrol.Visible = $true
-$ctrlsmainform += $tabcontrol
-
-
-
-
-
-#þegar ein hurð lokast opnast önnur...
-$tab1tbnnetkort = buttonmaker -text "Opna Netkort" -location (9,50)
-$tab1tbnnetkort.Size =  New-Object System.Drawing.Size(120,25)
-$tab1tbnnetkort.Add_Click({$mainform.Hide()
-$netform.ShowDialog()
-})
-$ctrlstabpage1 += $tab1tbnnetkort
-#endregion
-
-#tooltips
-$tooltipcontrol = New-Object System.Windows.Forms.ToolTip 
-$tooltipcontrol.SetToolTip($tab1tbnnetkort,"Breyttu Netkortsupplýsingum")
-$tooltipcontrol.SetToolTip($tab1lbldomname,"Sláðu inn domain nafnið, .local er bætt við sjálfkrara")
-$tooltipcontrol.SetToolTip($tab1btndomain,"Búa til domainið")
-$tooltipcontrol.SetToolTip($tab2txtscopenafn,"Má vera hvað sem ver")
-$tooltipcontrol.SetToolTip($tab2txtscopestart,"t.d. 192.168.1.50")
-$tooltipcontrol.SetToolTip($tab2txtscopeend,"t.d. 192.168.1.150")
-$tooltipcontrol.SetToolTip($tab2txtsubmask,"t.d 255.255.255.2")
-$tooltipcontrol.SetToolTip($tab2txtdns,"Hver á að vera 'routerinn'")
-
-
-#region tab1
 #RichTexBox í tab1
 $rtbtab1 = New-Object System.Windows.Forms.RichTextBox
 $rtbtab1.ReadOnly = $true
@@ -421,25 +417,19 @@ $tab1btndomain.add_Click({
     
     $domain = $tab1tbdomain.Text
     $local = ".local" 
-    $domainlocal = $domain+$local
-    $pass = $tab1safeadminpass.Text
+
    
     $a = New-Object -ComObject Wscript.Shell
     $svar = $a.popup("Búa til domainið $domainlocal ?",0,"Staðfesta",4)}
+    
 
     if($svar -eq 6){
-        $error.Clear()
-        try {
+        $domainlocal = $domain+$local
+        $pass = $tab1safeadminpass.Text
 
             Install-WindowsFeature -Name AD-Domain-Services –IncludeManagementTools
             Install-ADDSForest –DomainName $domainlocal –InstallDNS -SafeModeAdministratorPassword (ConvertTo-SecureString -AsPlainText "$pass" -Force) 
-            }
-        catch {$error, "Vandamál kom upp" }
-            if (!$error) {
-            $wshell = New-Object -ComObject Wscript.Shell
-            $wshell.Popup("Aðgerð Tókst, Vél mun endurræsa sig",0,"Okei",0x1)
 
-            }
     }
 
 })
@@ -461,12 +451,74 @@ $tabpages += $tabpage1
 
 #endregion tabpage1
 
+
+
+#region tab2
+
+
 #tabpage2 - Seinni tabinn í ævintýrinu
 $tabpage2 = New-Object System.Windows.Forms.TabPage
-$tabpage2.Text = "Búa til DHCP Scope"
-$tabpage2.add_Enter({$mainform.ClientSize = New-Object System.Drawing.Size(230,500)
+$tabpage2.Text = "DHCP Scope + domainvélar"
+$tabpage2.add_Enter({
+
+
+$mainform.ClientSize = New-Object System.Drawing.Size(800,500)
 $tabcontrol.ClientSize = $mainform.ClientSize
-})
+}) 
+
+#datagridview scopes
+$datagrid = new-object System.Windows.Forms.DataGridView
+$datagrid.Location = New-Object System.Drawing.Size(250,40)
+$datagrid.Clientsize = New-Object System.Drawing.Size(600,100)
+$datagrid.ColumnCount = 5
+$datagrid.Columns[0].Name = "ScopeName"
+$datagrid.Columns[1].Name = "IpStart"
+$datagrid.Columns[2].Name = "State"
+$datagrid.Columns[3].Name = "Free"
+$datagrid.Columns[4].Name = "InUse" 
+$datagrid.SelectionMode = "FullRowSelect"
+function datagridinfo {
+$datagrid.Rows.Clear()
+$scope = Get-DhcpServerv4Scope
+for ($i = -1; $i -lt $scope.Count; $i++)
+{ 
+    $scopeid = $scope[$i].ScopeId
+    $scopestats = Get-DhcpServerv4ScopeStatistics -ScopeId $scopeid
+    $scopestats.Free
+    
+    $row = @($scope[$i].Name, $scope[$i].StartRange, $scope[$i].State,$scopestats.Free,$scopestats.InUse)
+    $datagrid.Rows.Add($row)
+
+}
+}
+datagridinfo
+$ctrlstabpage2 += $datagrid
+
+#datagridview scopes
+$datagrid2 = new-object System.Windows.Forms.DataGridView
+$datagrid2.Location = New-Object System.Drawing.Size(250,200)
+$datagrid2.Clientsize = New-Object System.Drawing.Size(600,130)
+$datagrid2.ColumnCount = 4
+$datagrid2.Columns[0].Name = "Name"
+$datagrid2.Columns[1].Name = "IPv4"
+$datagrid2.Columns[2].Name = "OperatingSystem"
+$datagrid2.Columns[2].Width = 200
+$datagrid2.Columns[3].Name = "Enabled"
+
+
+$datagrid2.SelectionMode = "FullRowSelect"
+
+function datagridinfo2 {
+$datagrid2.Rows.Clear()
+$adcomputers = Get-ADComputer -Filter * -properties *
+foreach($computer in $adcomputers){
+    $row = @($computer.Name, $computer.IPv4Address, $computer.OperatingSystem, $computer.Enabled)
+    $datagrid2.Rows.Add($row)
+
+}
+}
+datagridinfo2
+$ctrlstabpage2 += $datagrid2
 
 
 #label í tab 2
@@ -475,6 +527,22 @@ $tab2lblscopenafn = labelmaker -text "Nafn á DHCP Scopei" -location (9,20)
 $tab2lblscopenafn.Size = New-Object System.Drawing.Size(200,20)
 $tab2lblscopenafn.TextAlign = $texttalign
 $ctrlstabpage2 += $tab2lblscopenafn
+
+$tab2lblscopes = Labelmaker -text "Upplýsingar um DHCP scopes" -location (250,20)
+$tab2lblscopes.Size = New-Object System.Drawing.Size(200,20)
+$ctrlstabpage2 += $tab2lblscopes
+
+$tab2lbladcomp = Labelmaker -text "Upplýsingar um Tölvur á domaini" -location (250,180)
+$tab2lbladcomp.Size = New-Object System.Drawing.Size(200,20)
+$ctrlstabpage2 += $tab2lbladcomp
+
+$tab2lbladdcpdomain = Labelmaker -text "Bæta við tölvu á domain" -location (250,330)
+$tab2lbladdcpdomain.Size = New-Object System.Drawing.Size(200,20)
+$ctrlstabpage2 += $tab2lbladdcpdomain
+
+$tab2lbladcpname = Labelmaker -text "Nafn á Tölvu til að bæta við" -location (250,350)
+$tab2lbladcpname.Size = New-Object System.Drawing.Size(200,20)
+$ctrlstabpage2 += $tab2lbladcpname
 
 $tab2lblscopestart = labelmaker -text "Hvaða iptölu á scope-ið að byrja" -location (9,100)
 $tab2lblscopestart.Size = New-Object System.Drawing.Size(200,20)
@@ -512,14 +580,109 @@ $ctrlstabpage2 += $tab2txtsubmask
 $tab2txtdns = tbmaker -size (200,20) -location (9,370)
 $ctrlstabpage2 += $tab2txtdns
 
+$tab2txtadcpadd = tbmaker -size (200,20) -location (250,370)
+$ctrlstabpage2 += $tab2txtadcpadd
+
+
 #button í tab 2
+$tab2btndeletescope = buttonmaker -text "Eyða scope" -location (250,150)
+$tab2btndeletescope.add_Click({
+    $inuse = $datagrid.SelectedCells[4].Value
+    if($inuse -eq 0)
+    {
+    villapopup -message "Scope er í notkun og því verður ekki eytt"
+    }
+    else{
+    $Scopeid = Get-DhcpServerv4Scope | Where-Object Name -eq $datagrid.SelectedCells[0].Value
+    Remove-DhcpServerv4Scope $Scopeid.ScopeId
+    }
+    datagridinfo
+})
+$ctrlstabpage2 += $tab2btndeletescope
+
+$tab2btnadddomain = buttonmaker -text "Bæta við tölvu á domain" -location (250,390)
+$tab2btnadddomain.Size = New-Object System.Drawing.Size (200,20)
+$tab2btnadddomain.add_Click({
+    $cp = $tab2txtadcpadd.Text
+    if($cp.Length -eq 0)
+    {
+        villapopup -message "Má ekki vera tómt"
+    }
+    else{
+        $Error.Clear()
+        try{
+            $domain = get-addomain
+            $dnslocal = $domain.DNSroot
+        
+            Add-Computer -ComputerName $cp -LocalCredential "$cp\Administrator" -DomainName $domain.DNSRoot -Credential "$dnslocal\Administrator" -Restart -Force 
+            villapopup -message "Aðgerð tókst $cp er kominn á $dnslocal, $cp endurræsir sig"
+            datagridinfo2
+        }
+        catch{
+            villapopup -message $error
+        }
+    }
+    
+})
+$ctrlstabpage2 += $tab2btnadddomain
+
 $tab2btnscope = buttonmaker -text "Staðfesta" -location (9,400)
 $ctrlstabpage2 += $tab2btnscope
+$tab2btnscope.add_Click({
+    $scopename = $tab2txtscopenafn.Text
+    $ipstart = $tab2txtscopestart.Text
+    $ipend = $tab2txtscopeend.Text
+    $subnet = $tab2txtsubmask.Text
+    $dns = $tab2txtdns.Text
+
+    $ipstartsplit = $ipstart.split('.')
+    $ipendsplit = $ipend.split('.')
+    $subnetsplit = $subnet.split('.')
+    $dnssplit = $dns.split('.')
+
+    if($scopename.Length -eq 0)
+    {
+        villapopup -message "Nafnið má ekki vera tómt"
+    }
+    elseif($ipstartsplit.Count -ne 4)
+    {
+        villapopup -message "Byrjun á scope-i er ekki í réttu sniði"
+    }
+    elseif($ipendsplit.Count -ne 4)
+    {
+        villapopup -message "Endir á scope-i er ekki í réttu sniði"
+    }
+    elseif($subnetsplit.Count -ne 4)
+    {
+        villapopup -message "Subnet Maski ekki í réttu sniði"
+    }
+        elseif($dnssplit.Count -ne 4)
+    {
+        villapopup -message "DNS ekki í réttu sniði"
+    }
+    else
+    {
+    $error.Clear()
+    try {
+        $domain = Get-ADDomain
+    
+        Add-DhcpServerv4Scope -Name $scopename -StartRange $ipstart -EndRange $ipend -SubnetMask $subnet #setur upp dhcp scope
+        Set-DhcpServerv4OptionValue -DnsServer $dns -Router $dns #oft iptala serversins
+        Add-DhcpServerInDC -DnsName $domain.Forest #t.d. $($env:computername + “.” $env:userdnsdomain)
+        villapopup -message "$scopename hefur verið stofnað"
+        datagridinfo
+    }
+    catch{
+    villapopup -message $error
+    }
+
+    }
 
 
 
+})
 
-#region tab2
+
 
 
 foreach($item in $ctrlstabpage2){
@@ -527,14 +690,50 @@ $tabpage2.Controls.Add($item)
 }
 $tabpages += $tabpage2
 
+
+#endregion tab2
+
+#region tab3
+$tabpage3 = New-Object System.Windows.Forms.TabPage
+$tabpage3.Text = "Notendur og Möppur"
+$tabpage3.add_Enter({
+$mainform.ClientSize = New-Object System.Drawing.Size(800,500)
+$tabcontrol.ClientSize = $mainform.ClientSize
+})
+
+
+foreach($item in $ctrlstabpage3){
+$tabpage2.Controls.Add($item)
+}
+$tabpages += $tabpage3
+
+
+
+
+#endregion tab3
+
 foreach($tab in $tabpages)
 {
 $tabcontrol.Controls.Add($tab)
 }
-#endregion tab2
+#tooltips - Virðist ekki virka alltaf af einhverri ástæðu?... 
+$tooltipcontrol = New-Object System.Windows.Forms.ToolTip 
+$tooltipcontrol.SetToolTip($tab1tbnnetkort,"Breyttu Netkortsupplýsingum")
+$tooltipcontrol.SetToolTip($tab1lbldomname,"Sláðu inn domain nafnið, .local er bætt við sjálfkrara")
+$tooltipcontrol.SetToolTip($tab1btndomain,"Búa til domainið")
+$tooltipcontrol.SetToolTip($tab2txtscopenafn,"Má vera hvað sem ver")
+$tooltipcontrol.SetToolTip($tab2txtscopestart,"t.d. 192.168.1.50")
+$tooltipcontrol.SetToolTip($tab2txtscopeend,"t.d. 192.168.1.150")
+$tooltipcontrol.SetToolTip($tab2txtsubmask,"t.d 255.255.255.0")
+$tooltipcontrol.SetToolTip($tab2txtdns,"DNS fyrir scopeið'")
+$tooltipcontrol.SetToolTip($tab2btndeletescope,"Eyðir völdu scopei")
+$tooltipcontrol.SetToolTip($tab2txtadcpadd,"Sláðu inn nafn vélar")
+
+
 
 
 #Byrjum þetta
 $mainform.controls.Add($tabcontrol)
 $mainform.ShowDialog()
 $mainform.add_Closed({$mainform.Close()})
+
