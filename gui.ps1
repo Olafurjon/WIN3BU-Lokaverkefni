@@ -1,11 +1,11 @@
-﻿Add-Type -AssemblyName System.Windows.Forms
+﻿Add-Type -AssemblyName System.Windows.Forms | Out-Null
 
 
 #set þetta hér því af einhverri ástæðu festist þetta í 10% ef ég var með þetta innaní forminu
 $dhcp = Get-WindowsFeature -Name DHCP 
 if($dhcp.Installed -eq $false)
 {
-Install-WindowsFeature –Name DHCP –IncludeManagementTools
+Install-WindowsFeature –Name DHCP –IncludeManagementTools | Out-Null
 }
 
 #býr til label með staðsettum texta og staðsetningu
@@ -42,6 +42,114 @@ return $label
 
 
 }
+function replaceISL {
+ param( 
+ [Parameter(Mandatory=$true)]
+    $string
+ )
+ #Þessi partur skiptir út öllum stöfum, (get bætt alltaf við í framtíðinni ef vantar...
+ $string = $string -replace 'á','a'
+ $string = $string -replace 'Á','A'
+ $string = $string -replace 'í','i'
+ $string = $string -replace 'Í','I'
+ $string = $string -replace 'É','E'
+ $string = $string -replace 'é','e'
+ $string = $string -replace 'Ý','Y'
+ $string = $string -replace 'ý','y'
+ $string = $string -replace 'Ú','U'
+ $string = $string -replace 'ú','u'
+ $string = $string -replace 'Ó','O'
+ $string = $string -replace 'ó','o'
+ $string = $string -replace 'ö','o'
+ $string = $string -replace 'Ö','O'
+ $string = $string -replace 'Ð','D'
+ $string = $string -replace 'ð','d'
+ $string = $string -replace 'Æ','Ae'
+ $string = $string -replace 'æ','ae'
+ $string = $string -replace 'Þ','Th'
+ $string = $string -replace 'þ','th'
+ $string = $string.ToLower() #Það var hér sem ég fattaði að ég hefði allteins geta sleppt stóru stöfunum.....
+ #skiptir þessu niður þannig að ég geti unnið með þetta sem array og þægilegri máta til að breyta stórum stöfum í byrjun
+ $string = $string.Split()
+ $cache = ""
+ for($i = 0; $i -lt $string.Count; $i++){
+     $cache += $string[$i][0]
+     $cache = $cache.ToUpper()
+     $string[$i] = $string[$i].Remove(0,1)
+     $string[$i] = $string[$i].ToString().Insert(0,$cache[$i])
+     }
+ foreach($str in $string) {
+     $string2 += $str +" "#bæti einu ljótu whitespacei við sem ég fjarlægi í lokinn
+     }
+     $string2 = $string2.Substring(0,$string2.Length-1)
+
+     return $string2
+}
+
+function Nafnareglur{
+param(
+[parameter(Mandatory = $true)]
+$nafn
+)#tekur inn fullt nafn sem parameter
+
+if($nafn[-1] -eq " ") #þessi if setning kemur í veg fyrir að ef að CSV skráin er með auka bil eftir eftirnafninu að það verði meðtekið sem eftirnafn
+    {
+    while ($nafn[-1] -eq " ")
+    {
+        $nafn = $nafn.Substring(0,$nafn.Length -1)
+
+    }
+
+
+}
+$samname = $null #núllstillir stöðvar, hef þetta uppá öryggið
+$eftirnafn = $null
+$info = @{} #skilast sem hastafla sem kallar þá bara í fornafn: eftirnafn: usernafn: eftir þvúi hvað við á
+$fornafn = $null
+$nafnsplit = $nafn.Split() #splitta array til að vinna með
+    for ($i = 0; $i -ne $nafnsplit.Length -1 ; $i++){$fornafn += $nafnsplit[$i] + " " } #þessi forlúppa byr til fornafnið
+$fornafn = $fornafn.Substring(0,$fornafn.Length -1) #þessi skipun fjarlægir þetta auka bil sem ég bjó til með forloopunni
+$eftirnafn = $nafnsplit[-1] #eftirnafnið er bara síðasta indexið í nafninu sem við splittuðum
+$samname = replaceISL -string $nafn #bless íslenskir stafir
+$samname = $samname.Replace(' ','.') #þar sem er bil er sett punktur
+
+if($samname.Length -gt 20) #ef að þetta er lengra en þessir 20 stafir þá bara týnum við aftasta út þangað til að við erum góðir
+{
+    while ($samname.Length -gt 20)
+    {
+    $samname = $samname.Substring(0,$samname.Length -1)
+    }
+}
+f($samname[-1] -eq '.')
+{
+    $samname = $samname.Substring(0,$samname.Length-1)
+}
+
+$samname = $samname.ToLower() #hendum í lowercase
+#setjum upplýsingarnar í hastöflu
+$info.Add("fornafn:", $fornafn)
+$info.Add("eftirnafn:",$eftirnafn)
+$info.Add("username:",$samname) 
+
+return $info
+
+}
+
+
+function checkboxmaker{
+param(
+[Parameter(Mandatory)]
+$text,
+[Parameter(Mandatory)]
+$location
+)
+
+$checkbox1 = new-object System.Windows.Forms.CheckBox
+$checkbox1.Size = New-Object System.Drawing.Size (250,25)
+$checkbox1.Text = $text
+$checkbox1.Location = New-Object System.Drawing.Size $location
+return $checkbox1
+}
 
 function tbmaker{
 param(
@@ -67,6 +175,43 @@ $message
 $wshell = New-Object -ComObject Wscript.Shell
 
 $wshell.Popup($message)}
+
+function Get-FileName($initialDirectory)
+{
+    ##ætlaði að búa þetta til en fann þetta hér:
+    #Var frekar basic að skilja
+    [System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null
+    
+    $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
+    $OpenFileDialog.initialDirectory = $initialDirectory
+    $OpenFileDialog.filter = "CSV (*.csv)| *.csv"
+    $OpenFileDialog.ShowDialog() | Out-Null
+    $OpenFileDialog.filename
+}
+
+function Import-csvfile
+{
+param(
+[Parameter(Mandatory)]
+$delim
+
+)
+Function Get-FileName($initialDirectory)
+{
+    ##ætlaði að búa þetta til en fann þetta hér:
+    #Var frekar basic að skilja
+    [System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null
+    
+    $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
+    $OpenFileDialog.initialDirectory = $initialDirectory
+    $OpenFileDialog.filter = "CSV (*.csv)| *.csv"
+    $OpenFileDialog.ShowDialog() | Out-Null
+    $OpenFileDialog.filename
+}
+$csv = Get-FileName
+Import-Csv $csv -Encoding Default -Delimiter $delim
+
+}
 
 #region mainform og tabcontrol
 $ctrlsmainform = @()
@@ -123,7 +268,7 @@ function netformtextupdate{
         $netformIP6info.Text = $info.IPv6Address
         $netformPrefinfo.Text = $prefix[0].PrefixLength
     }
-    if($info.DNSServer[0].ServerAddresses.Count -eq 0){
+    if($info.DNSServer[0].ServerAddresses.Count -ne 0){
     $netformDNSinfo.Text = $info.DNSServer[1].Address
     }
     else{
@@ -221,7 +366,7 @@ $netform.Close()
 
 })
 
-#Comboboxið fyrir netform heldur yfir öll local og virtual netkort
+#Comboboxið fyrir netform 
 $combo = New-Object System.Windows.Forms.ComboBox
 $combo.Size = New-Object System.Drawing.Size(190,25)
 $combo.DropDownStyle = "DropDownList"
@@ -450,7 +595,6 @@ $tabpage1.Controls.Add($item)
 $tabpages += $tabpage1
 
 #endregion tabpage1
-
 
 
 #region tab2
@@ -702,8 +846,349 @@ $tabcontrol.ClientSize = $mainform.ClientSize
 })
 
 
+#dynamicdropdown
+$dynamicdrop = @()
+$y = 60
+for ($i = 1; $i -lt 20; $i++)
+{ 
+    $dropdown = New-Object System.Windows.Forms.ComboBox
+    $dropdown.DropDownStyle = "DropDownList"
+    $dropdown.Location = New-Object System.Drawing.Size (91,$y)
+    $dropdown.Size = New-Object System.Drawing.Size (200,25)
+    $dropdown.Visible = $false
+    $dropdown.Text = "Veldu það sem á við"
+    $dynamicdrop += $dropdown
+
+     
+    $y+=30
+}
+$ctrlstabpage3 += $dynamicdrop
+
+#labels í tab3
+$importcsvlbl = labelmaker -text "Byrjaðu hér" -location (9,5)
+$importcsvlbl.TextAlign = "MiddleLeft"
+$ctrlstabpage3 += $importcsvlbl
+
+$checkboxlabel = labelmaker -text "Aukahjálp" -location (300,15)
+$checkboxlabel.Visible = $false
+$ctrlstabpage3 += $checkboxlabel
+
+#dynamiclabels
+$dynamiclabels = @()
+$y = 60
+for ($i = 1; $i -lt 20; $i++)
+{ 
+    $label = labelmaker -text " " -location (9,$y)
+    $label.Visible = $false
+    $label.TextAlign = "MiddleLeft"
+    $dynamiclabels += $label
+    $y += 30
+    
+}
+$ctrlstabpage3 += $dynamiclabels 
+
+
+
+
+
+
+#checkbox
+$dynamiccbox = @()
+$cboxsplitname = checkboxmaker -text "Skipta Nafni í fornafn og eftirnafn" -location (300,60)
+$dynamiccbox += $cboxsplitname
+$ctrlstabpage3 += $cboxsplitname 
+
+$cboxchangepass = checkboxmaker -text "ChangePasswordatLogon = $true" -location (300,80)
+$dynamiccbox += $cboxchangepass
+$ctrlstabpage3 += $cboxchangepass 
+
+
+$cboxdefaultpass = checkboxmaker -text "Setja lykilorðið pass.123" -location (300,100)
+$dynamiccbox += $cboxdefaultpass
+$ctrlstabpage3 += $cboxdefaultpass 
+
+$cboxusername = checkboxmaker -text "Skapa notendanafn úr fullunafni og punkt" (300,120)
+$cboxusername.add_Checkedchanged({
+    if($cboxusername.Checked -eq $true)
+    {
+        $cboxusername2.Checked = $false 
+    }
+})
+$dynamiccbox += $cboxusername
+$ctrlstabpage3 += $cboxusername 
+
+$cboxusername2 = checkboxmaker -text "Skapa notendanafn úr nafni og tölu" (300,140)
+$cboxusername2.add_CheckedChanged({
+       if($cboxusername2.Checked -eq $true)
+    {
+        $cboxusername.Checked = $false 
+    }
+         
+})
+$dynamiccbox += $cboxusername2
+$ctrlstabpage3 += $cboxusername2 
+
+$dropdownou = New-Object System.Windows.Forms.ComboBox
+$dropdownou.Location = New-Object System.Drawing.Size (450,180)
+foreach ($item in $csvheaders)
+{
+    $dropdownou.Items.Add($item.Name)
+}
+$ctrlstabpage3 += $dropdownou
+$dynamiccbox += $dropdownou
+
+$cbNotendurogsg = checkboxmaker -text "Búa til Notendur OU og Group" -location (300,160)
+$dynamiccbox += $cbNotendurogsg
+$ctrlstabpage3 += $cbNotendurogsg 
+
+
+$cbNotendurogsg = checkboxmaker -text "Búa til OU flokkað eftir:" -location (300,180)
+$dynamiccbox += $cbNotendurogsg
+$ctrlstabpage3 += $cbNotendurogsg 
+
+$moppur = checkboxmaker -text "Búa til möppur líka" -location (330,200)
+$dynamiccbox += $moppur
+$ctrlstabpage3 += $moppur 
+
+$Securitygroups = checkboxmaker -text "Búa til Security groups líka" -location (330,220)
+$dynamiccbox += $Securitygroups
+$ctrlstabpage3 += $Securitygroups 
+
+foreach($box in $dynamiccbox)
+{
+    $box.visible = $false
+}
+
+
+
+
+
+
+
+#buttons í tab3
+
+$creatusersbtn = buttonmaker -text "Keyra inn  Notendur" -location (300,300)
+$creatusersbtn.size = New-Object System.Drawing.Size (200,25)
+$ctrlstabpage3 += $creatusersbtn
+$dynamiccbox += $creatusersbtn
+$creatusersbtn.Visible = $False
+
+$importcsvbtn = buttonmaker -text "Smelltu til að velja CSV skrá" -location (9,30)
+$importcsvbtn.Size = New-Object System.Drawing.Size (200,25)
+$importcsvbtn.add_Click({
+    $csvpath = Get-FileName($initialDirectory)
+    $csv = Import-Csv -Path $csvpath -Delimiter ','
+    $csvheaders = $csv | Get-Member -MemberType NoteProperty
+    if($csvheaders.count -le 1)
+    {
+        $csv = Import-Csv -Path $csvpath -Delimiter ';'
+        $csvheaders = $csv | Get-Member -MemberType NoteProperty
+    }
+
+function lineupheaders{
+    foreach($label in $dynamiclabels)
+    {
+        $label.Text = " "
+        $label.Visible = $false
+    
+    }
+   
+
+    $i = 0
+    foreach($head in $csvheaders){
+        $header = $head.Name + ":"
+        $dynamiclabels[$i].Text = $header
+        $dynamiclabels[$i].Visible = $true
+        $i++
+        
+    }
+}
+
+function lineupdrowdowns{
+
+foreach($drop in $dynamicdrop)
+{
+
+$drop.Visible = $false
+$drop.Text = ""
+$drop.SelectedIndex = -1
+$drop.Items.Clear()
+}
+
+    $command = Get-Command -Name new-aduser 
+    $commandkeys = $command.Parameters.Keys
+    $parameters = @()
+    $badword = @("Verbose","Credential","Debug","ErrorAction","WarningVariable","WarningAction","ErrorVariable","OutVariable","OutBuffer","PipelineVariable","Whatif","Confirm","AllowReversiblePasswordEncryption","Certificates","AuthType","TrustedForDelegation","SmartCardLogonRequired","KerberosEncryptionType","Instance","AuthenticationPolicySilo","AuthenticationPolicy","AccountNotDelegated")
+    foreach ($key in $commandkeys)
+    {
+        if($key -notin $badword)
+        {$parameters += $key}
+    }
+    $parameters += "Veldu það sem á við"
+    $parameters += "Ekkert"
+    $paramdefault = $parameters.IndexOf("Veldu það sem á við")
+    $paramdeild = $parameters.IndexOf("Department")
+    $paramtitle = $parameters.IndexOf("Title")
+    $paramhphone = $parameters.IndexOf("HomePhone")
+    $paramName = $parameters.IndexOf("Name")
+    $paramfornafn = $parameters.IndexOf("GivenName")
+    $paramsurname = $parameters.IndexOf("Surname")
+    $paramstreetadd = $parameters.IndexOf("StreetAddress")
+for ($i = 0; $i -lt $csvheaders.Count; $i++)
+{
+
+    foreach($param in $parameters)
+    {
+        $dynamicdrop[$i].Items.Add($param)
+        
+    }
+    $dynamicdrop[$i].SelectedIndex = $paramdefault
+
+   if($dynamiclabels[$i].Text -like "Deild:"){
+        $dynamicdrop[$i].SelectedIndex = $paramdeild
+        }
+   if($dynamiclabels[$i].Text -like "Titill:"){
+        $dynamicdrop[$i].SelectedIndex = $paramtitle
+        }
+   if($dynamiclabels[$i].Text -like "HeimaSími:"){
+        $dynamicdrop[$i].SelectedIndex = $paramhphone
+        }
+   if($dynamiclabels[$i].Text -like "Nafn:"){
+        $dynamicdrop[$i].SelectedIndex = $paramName
+        }
+   if($dynamiclabels[$i].Text -like "Fornafn:"){
+        $dynamicdrop[$i].SelectedIndex = $paramfornafn
+        }
+   if($dynamiclabels[$i].Text -like "Eftirnafn:"){
+        $dynamicdrop[$i].SelectedIndex = $paramsurname
+        }
+   if($dynamiclabels[$i].Text -like "Heimilisfang:"){
+        $dynamicdrop[$i].SelectedIndex = $paramstreetadd
+        }
+
+
+
+    $dynamicdrop[$i].visible = $true
+}
+
+}
+
+    lineupheaders
+    lineupdrowdowns 
+
+    $checkboxlabel.Visible = $True
+    foreach($box in $dynamiccbox)
+    {
+        $box.visible = $true
+
+    }
+    $texts = @()
+    foreach($text in $dynamicdrop) 
+    {
+        if($text.Text.Length -ne 0)
+        {
+            $texts += $text.Text
+        }
+    } 
+
+    if($texts -contains "Surname" -or $texts -contains "GivenName")
+    {
+       $cboxsplitname.Checked = $false 
+    }
+    else {
+        $cboxsplitname.Checked = $true 
+    }
+
+    if($texts -notcontains "AccountPassword")
+    {
+       $cboxchangepass.Checked = $true
+       $cboxdefaultpass.Checked = $true
+    }
+
+
+
+     
+})
+
+$ctrlstabpage3 += $importcsvbtn
+
+$creatusersbtn.add_Click({
+    $texts = @()
+
+    foreach($text in $dynamicdrop) 
+    {
+        if($text.Text.Length -ne 0)
+        {
+            $texts += $text.Text
+        }
+    } 
+
+    if($texts -contains "Veldu það sem á við")
+    {
+        Villapopup -message "Þú átt enn eftir að velja parameter fyrir reit"
+    }
+    $createuserstring = "new-aduser "
+    $command = Get-Command -Name new-aduser 
+    $commandkeys = $command.Parameters.Keys
+    $parameters = @()
+    $badword = @("Verbose","Credential","Debug","ErrorAction","WarningVariable","WarningAction","ErrorVariable","OutVariable","OutBuffer","PipelineVariable","Whatif","Confirm","AllowReversiblePasswordEncryption","Certificates","AuthType","TrustedForDelegation","SmartCardLogonRequired","KerberosEncryptionType","Instance","AuthenticationPolicySilo","AuthenticationPolicy","AccountNotDelegated")
+    foreach ($key in $commandkeys)
+    {
+        if($key -notin $badword)
+        {$parameters += $key}
+    }
+    $u = "$"
+    $header = ""
+    foreach ($param in $parameters)
+    {
+      if($texts -contains $param)
+      {
+        $index = $texts.IndexOf($param)
+        $header = $dynamiclabels[$index].Text
+        $header = $header.Substring(0,$header.Length -1)
+        $createuserstring += " -"+$param.ToString()+" " +$u.ToString() +'u.' + $header.ToString()+" "
+        
+      }   
+    }
+    $createuserstring += " -enabled $True"
+
+    if($cboxsplitname.Checked -eq $true)
+    {
+
+    
+    }
+
+    function splitname
+    {
+    param(
+    [Parameter(Mandatory)]
+    $name
+    )
+
+    $name = Nafnareglur
+
+
+    }
+    write-host $createuserstring
+
+
+
+
+
+    foreach($u in $csv)
+    {
+    }
+    $invoke = [Scriptblock]::Create($createuserstring)
+
+
+
+
+    
+})
+
+
 foreach($item in $ctrlstabpage3){
-$tabpage2.Controls.Add($item)
+$tabpage3.Controls.Add($item)
 }
 $tabpages += $tabpage3
 
@@ -716,7 +1201,7 @@ foreach($tab in $tabpages)
 {
 $tabcontrol.Controls.Add($tab)
 }
-#tooltips - Virðist ekki virka alltaf af einhverri ástæðu?... 
+#tooltips  
 $tooltipcontrol = New-Object System.Windows.Forms.ToolTip 
 $tooltipcontrol.SetToolTip($tab1tbnnetkort,"Breyttu Netkortsupplýsingum")
 $tooltipcontrol.SetToolTip($tab1lbldomname,"Sláðu inn domain nafnið, .local er bætt við sjálfkrara")
@@ -728,8 +1213,9 @@ $tooltipcontrol.SetToolTip($tab2txtsubmask,"t.d 255.255.255.0")
 $tooltipcontrol.SetToolTip($tab2txtdns,"DNS fyrir scopeið'")
 $tooltipcontrol.SetToolTip($tab2btndeletescope,"Eyðir völdu scopei")
 $tooltipcontrol.SetToolTip($tab2txtadcpadd,"Sláðu inn nafn vélar")
-
-
+$tooltipcontrol.SetToolTip($cboxusername,"dæmi: Jon.jonsson")
+$tooltipcontrol.SetToolTip($cboxusername2,"dæmi: jon1")
+$tooltipcontrol.SetToolTip($cboxchangepass,"Notandi breytir password við næsta logon")
 
 
 #Byrjum þetta
