@@ -120,7 +120,7 @@ if($samname.Length -gt 20) #ef að þetta er lengra en þessir 20 stafir þá ba
     $samname = $samname.Substring(0,$samname.Length -1)
     }
 }
-f($samname[-1] -eq '.')
+if($samname[-1] -eq '.')
 {
     $samname = $samname.Substring(0,$samname.Length-1)
 }
@@ -930,29 +930,55 @@ $ctrlstabpage3 += $cboxusername2
 
 $dropdownou = New-Object System.Windows.Forms.ComboBox
 $dropdownou.Location = New-Object System.Drawing.Size (450,180)
-foreach ($item in $csvheaders)
-{
-    $dropdownou.Items.Add($item.Name)
-}
+
 $ctrlstabpage3 += $dropdownou
 $dynamiccbox += $dropdownou
 
-$cbNotendurogsg = checkboxmaker -text "Búa til Notendur OU og Group" -location (300,160)
+$oucheck = ""
+$cbNotendurogsg = checkboxmaker -text "Búa til/setja í Notendur OU og Group" -location (300,160)
+$cbNotendurogsg.Checked = $true
+$oucheck = Get-ADOrganizationalUnit -Filter {name -like "Notendur"} -Properties *
+$cbNotendurogsg.add_CheckedChanged({
+if($cbNotendurogsg.Checked -eq $false)
+{
+    
+    if($oucheck -eq $null)
+    {
+        villapopup -message "Ef þú ert með þetta óhakað fara notendur í default users"
+    }
+}
+
+})
 $dynamiccbox += $cbNotendurogsg
 $ctrlstabpage3 += $cbNotendurogsg 
 
 
-$cbNotendurogsg = checkboxmaker -text "Búa til OU flokkað eftir:" -location (300,180)
-$dynamiccbox += $cbNotendurogsg
-$ctrlstabpage3 += $cbNotendurogsg 
+$cbNotenduricustomou = checkboxmaker -text "Búa til/setja í OU flokkað eftir:" -location (300,180)
+$cbNotenduricustomou.Checked = $true
+$cbNotenduricustomou.add_CheckedChanged({
+    if($cbNotenduricustomou.Checked -eq $false)
+    {
+       $moppur.Checked = $false
+       $Securitygroups.Checked = $false
+       $prentarar.Checked = $false
+    }
+        
+
+})
+$dynamiccbox += $cbNotenduricustomou
+$ctrlstabpage3 += $cbNotenduricustomou 
 
 $moppur = checkboxmaker -text "Búa til möppur líka" -location (330,200)
 $dynamiccbox += $moppur
 $ctrlstabpage3 += $moppur 
 
-$Securitygroups = checkboxmaker -text "Búa til Security groups líka" -location (330,220)
+$Securitygroups = checkboxmaker -text "Búa til/setja í Security groups líka" -location (330,220)
 $dynamiccbox += $Securitygroups
-$ctrlstabpage3 += $Securitygroups 
+$ctrlstabpage3 += $Securitygroups
+
+$prentarar = checkboxmaker -text "Búa til prentara líka" -location (330,240)
+$dynamiccbox += $prentarar
+$ctrlstabpage3 += $prentarar  
 
 foreach($box in $dynamiccbox)
 {
@@ -1000,6 +1026,8 @@ function lineupheaders{
         $dynamiclabels[$i].Text = $header
         $dynamiclabels[$i].Visible = $true
         $i++
+        $dropdownou.Items.Add($head.Name)
+
         
     }
 }
@@ -1106,7 +1134,6 @@ for ($i = 0; $i -lt $csvheaders.Count; $i++)
     }
 
 
-
      
 })
 
@@ -1114,7 +1141,9 @@ $ctrlstabpage3 += $importcsvbtn
 
 $creatusersbtn.add_Click({
     $texts = @()
-
+    $messages = @()
+    $domain = get-addomain
+    $domainname = $domain.Name
     foreach($text in $dynamicdrop) 
     {
         if($text.Text.Length -ne 0)
@@ -1151,12 +1180,13 @@ $creatusersbtn.add_Click({
       }   
     }
     $createuserstring += " -enabled $True"
-
-    if($cboxsplitname.Checked -eq $true)
-    {
-
+    $createuserstring += "-UserPrincipalName $($n.Notendanafn + "@"+$domainname+".Local")"
+    $checksg = ""
     
-    }
+
+   
+
+
 
     function splitname
     {
@@ -1165,25 +1195,159 @@ $creatusersbtn.add_Click({
     $name
     )
 
-    $name = Nafnareglur
+    $name = Nafnareglur $name
+    return $name
 
 
+    }
+    $Error.Clear()
+    try
+    {
+        if($cbNotenduricustomou.Checked -eq $true)
+        {
+                $sorter = $dropdownou.Text
+                $createuserstring += "-Path $("OU=" + $sorter + ",OU=Notendur,DC=$domainname,DC=local")"
+        }
+
+
+        if($cbNotendurogsg.Checked -eq $true)
+        {
+        
+            if($oucheck -eq $null){
+
+                New-ADOrganizationalUnit -Name Notendur -ProtectedFromAccidentalDeletion $false 
+            }
+
+            if($Securitygroups.Checked -eq $true)
+            {
+
+                $checksg = Get-ADGroup -Filter {name -like "NotendurAllir"}
+                if($checksg -eq $null)
+                {
+                    New-ADGroup -Name NotendurAllir -Path OU=Notendur,DC=$domainname,DC=local -GroupScope Global 
+                }
+            }
+
+            if($moppur.checked -eq $True)
+            {  
+                Add-Type -AssemblyName System.Windows.Forms
+                $browser = New-Object System.Windows.Forms.FolderBrowserDialog
+                $browser.Description = "Veldu hvar þú vilt búa til Möppurnar"
+                $null = $browser.ShowDialog()
+                $path = $browser.SelectedPath
+                $path =  $path.ToString()
+                $checkpath = test-path $path\Sameign
+                if($checksg -eq $False)
+                {
+                    new-item $path\Sameign -ItemType Directory 
+                    $rettindi = Get-Acl -Path $path\Sameign 
+                    $nyrettindi = New-Object System.Security.AccessControl.FileSystemAccessRule "$domainname\NotendurAllir",'Modify','Allow' 
+                    $rettindi.AddAccessRule($nyrettindi)
+                    Set-Acl -Path "$path\Sameign" $rettindi 
+                    New-SmbShare -Name Sameign -Path $path\Sameign -FullAccess "$domainname\NotendurAllir", administrators 
+
+       
+                }
+            }
+
+            if($prentarar.checked -eq $True)
+            {
+                Add-PrinterDriver -Name "Brother Color Type3 Class Driver" #setur inn driver fyrir prentarann ef allir eru að nota sama kemur það upp sem bara 1 prentari og þarf að hægri smella á hann til að fá hina upp, svo það er hægt að harðkóða aðra driveraa inn
+                Add-Printer -Name "Sameign prentari2" -Location "Sameign" -Shared -PortName LPT1: -Drivername "Brother Color Type3 Class Driver" -Published #býr til sameigna prentarann og share-ar
+
+
+            }
+
+    
+    }
+
+   
+    
+        $s = "$"
+    foreach($u in $csv)
+    {
+
+
+        if($cboxsplitname.Checked -eq $true -and $cboxusername.checked -eq $True)
+        {
+            $name = $dynamiclabels[$texts.indexof("Name")].Text
+            $name = $name.Substring(0,$name.Length -1)
+            $name = $u.$name
+
+            $split = splitname $name
+            $given = $split['Fornafn:']
+            $surname = $split['Eftirnafn:']
+            $samacc  = $split['username:']
+
+            $createuserstring += "-GivenName $given -Surname $surname -SamAccountName $samacc -DisplayName $name"
+
+
+        }
+
+        if($cboxsplitname.Checked -eq $true -and $cboxusername.checked -eq $False)
+        {
+            $name = $dynamiclabels[$texts.indexof("Name")].Text
+            $name = $name.Substring(0,$name.Length -1)
+            $name = $u.$name
+
+            $split = splitname $name
+            $given = $split['Fornafn:']
+            $surname = $split['Eftirnafn:']
+            $samacc  = $split['username:']
+
+            $createuserstring += "-GivenName $given -Surname $surname -DisplayName $name "
+
+        }
+
+        
+    if((Get-ADOrganizationalUnit -Filter { name -eq $sorter }).Name -ne $sorter)
+    {
+        New-ADOrganizationalUnit -Name $sorter -Path "OU=Notendur,DC=$domainname,DC=local" -ProtectedFromAccidentalDeletion $false
+        New-ADGroup -Name $sorter -Path $("OU=" + $sorter + ",OU=Notendur,DC=$domainname,DC=local") -GroupScope Global
+        Add-ADGroupMember -Identity NotendurAllir -Members $sorter
+
+        #Bý til möppuna
+        new-item $path\$sorter -ItemType Directory
+ 
+        #sæki núverandi réttindi
+        $rettindi = Get-Acl -Path $path\$sorter
+ 
+        #bý til þau réttindi sem ég ætla að bæta við möppuna
+        $nyrettindi = New-Object System.Security.AccessControl.FileSystemAccessRule $domainname\$sorter,"Modify","Allow"
+        #Hver á að fá réttindin, hvaða réttindi á viðkomandi að fá, erum við að leyfa eða banna (allow eða deny)
+ 
+        #bæti nýju réttindunum við þau sem ég sótti áðan
+        $rettindi.AddAccessRule($nyrettindi)
+ 
+        #Set réttindin aftur á möppuna
+        Set-Acl -Path $path\$sorter $rettindi
+ 
+        #Share-a möppunni
+        New-SmbShare -Name $sorter -Path $path\$sorter -FullAccess $domainname\$sorter, administrators 
+
+        Add-Printer -Name $($sorter + " prentari") -Location $sorter -Shared -PortName LPT1: -Drivername "Brother Color Type3 Class Driver" -Published
+        $createuserstring += "`n Add-ADGroupMember -Identity $sorter -Members " + $s.ToString() + $samacc
+        write-host $createuserstring
+        $invoke = [Scriptblock]::Create($createuserstring)
+        $invoke.Invoke()
+        
     }
     write-host $createuserstring
 
-
-
-
-
-    foreach($u in $csv)
-    {
-    }
-    $invoke = [Scriptblock]::Create($createuserstring)
-
-
-
-
     
+    }
+    }
+    catch
+    {
+        villapopup -message $Error
+        Write-Host $Error 
+    }
+    
+
+
+
+
+
 })
 
 
