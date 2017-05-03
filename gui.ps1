@@ -1,5 +1,6 @@
 ﻿Add-Type -AssemblyName System.Windows.Forms | Out-Null
-
+$Script:csv =  " "
+$Script:test =  " "
 
 #set þetta hér því af einhverri ástæðu festist þetta í 10% ef ég var með þetta innaní forminu
 $dhcp = Get-WindowsFeature -Name DHCP 
@@ -969,6 +970,19 @@ $dynamiccbox += $cbNotenduricustomou
 $ctrlstabpage3 += $cbNotenduricustomou 
 
 $moppur = checkboxmaker -text "Búa til möppur líka" -location (330,200)
+$moppur.add_CheckedChanged({
+
+    if($moppur.Checked -eq $true)
+    {
+        $browser = New-Object System.Windows.Forms.FolderBrowserDialog
+        $browser.Description = "Veldu hvar þú vilt búa til Möppurnar"
+        $null = $browser.ShowDialog()
+        $path = $browser.SelectedPath
+        $path =  $path.ToString()
+        $path = [string]$path
+    
+    }
+})
 $dynamiccbox += $moppur
 $ctrlstabpage3 += $moppur 
 
@@ -1004,10 +1018,12 @@ $importcsvbtn.Size = New-Object System.Drawing.Size (200,25)
 $importcsvbtn.add_Click({
     $csvpath = Get-FileName($initialDirectory)
     $csv = Import-Csv -Path $csvpath -Delimiter ','
+    $Script:csv = $csv
     $csvheaders = $csv | Get-Member -MemberType NoteProperty
     if($csvheaders.count -le 1)
     {
         $csv = Import-Csv -Path $csvpath -Delimiter ';'
+        $Script:csv = $csv
         $csvheaders = $csv | Get-Member -MemberType NoteProperty
     }
 
@@ -1140,6 +1156,7 @@ for ($i = 0; $i -lt $csvheaders.Count; $i++)
 $ctrlstabpage3 += $importcsvbtn
 
 $creatusersbtn.add_Click({
+write-host "skref1"
     $texts = @()
     $messages = @()
     $domain = get-addomain
@@ -1156,7 +1173,9 @@ $creatusersbtn.add_Click({
     {
         Villapopup -message "Þú átt enn eftir að velja parameter fyrir reit"
     }
-    $createuserstring = "new-aduser "
+    else {
+    write-host "skref2"
+    $createuserstring = "New-ADUser"
     $command = Get-Command -Name new-aduser 
     $commandkeys = $command.Parameters.Keys
     $parameters = @()
@@ -1168,25 +1187,10 @@ $creatusersbtn.add_Click({
     }
     $u = "$"
     $header = ""
-    foreach ($param in $parameters)
-    {
-      if($texts -contains $param)
-      {
-        $index = $texts.IndexOf($param)
-        $header = $dynamiclabels[$index].Text
-        $header = $header.Substring(0,$header.Length -1)
-        $createuserstring += " -"+$param.ToString()+" " +$u.ToString() +'u.' + $header.ToString()+" "
-        
-      }   
-    }
-    $createuserstring += " -enabled $True"
-    $createuserstring += "-UserPrincipalName $($n.Notendanafn + "@"+$domainname+".Local")"
+
+    #$createuserstring += " -UserPrincipalName $($n.Notendanafn + "@"+$domainname+".Local")"
     $checksg = ""
     
-
-   
-
-
 
     function splitname
     {
@@ -1200,14 +1204,10 @@ $creatusersbtn.add_Click({
 
 
     }
-    $Error.Clear()
-    try
-    {
-        if($cbNotenduricustomou.Checked -eq $true)
-        {
-                $sorter = $dropdownou.Text
-                $createuserstring += "-Path $("OU=" + $sorter + ",OU=Notendur,DC=$domainname,DC=local")"
-        }
+
+
+        Write-Host $createuserstring
+        villapopup -message $sorter
 
 
         if($cbNotendurogsg.Checked -eq $true)
@@ -1224,27 +1224,22 @@ $creatusersbtn.add_Click({
                 $checksg = Get-ADGroup -Filter {name -like "NotendurAllir"}
                 if($checksg -eq $null)
                 {
-                    New-ADGroup -Name NotendurAllir -Path OU=Notendur,DC=$domainname,DC=local -GroupScope Global 
+                    New-ADGroup -Name NotendurAllir -Path "OU=Notendur,DC=$domainname,DC=local" -GroupScope Global 
                 }
             }
 
             if($moppur.checked -eq $True)
-            {  
-                Add-Type -AssemblyName System.Windows.Forms
-                $browser = New-Object System.Windows.Forms.FolderBrowserDialog
-                $browser.Description = "Veldu hvar þú vilt búa til Möppurnar"
-                $null = $browser.ShowDialog()
-                $path = $browser.SelectedPath
-                $path =  $path.ToString()
-                $checkpath = test-path $path\Sameign
+            {           
+
+                $checkpath = test-path $($path + "Sameign")
                 if($checksg -eq $False)
                 {
-                    new-item $path\Sameign -ItemType Directory 
-                    $rettindi = Get-Acl -Path $path\Sameign 
+                    new-item $($path + "Sameign") -ItemType Directory 
+                    $rettindi = Get-Acl -Path $($path + "Sameign") 
                     $nyrettindi = New-Object System.Security.AccessControl.FileSystemAccessRule "$domainname\NotendurAllir",'Modify','Allow' 
                     $rettindi.AddAccessRule($nyrettindi)
-                    Set-Acl -Path "$path\Sameign" $rettindi 
-                    New-SmbShare -Name Sameign -Path $path\Sameign -FullAccess "$domainname\NotendurAllir", administrators 
+                    Set-Acl -Path $($path + "Sameign") $rettindi 
+                    New-SmbShare -Name "Sameign" -Path $($path + "Sameign") -FullAccess "$domainname\NotendurAllir", administrators 
 
        
                 }
@@ -1253,33 +1248,56 @@ $creatusersbtn.add_Click({
             if($prentarar.checked -eq $True)
             {
                 Add-PrinterDriver -Name "Brother Color Type3 Class Driver" #setur inn driver fyrir prentarann ef allir eru að nota sama kemur það upp sem bara 1 prentari og þarf að hægri smella á hann til að fá hina upp, svo það er hægt að harðkóða aðra driveraa inn
-                Add-Printer -Name "Sameign prentari2" -Location "Sameign" -Shared -PortName LPT1: -Drivername "Brother Color Type3 Class Driver" -Published #býr til sameigna prentarann og share-ar
+                Add-Printer -Name "Sameign prentari2" -Location "Sameign" -Shared -PortName LPT1: -Drivername "Brother Color Type3 Class Driver"-ErrorAction Ignore  -Published  #býr til sameigna prentarann og share-ar
 
 
             }
 
-    
+    write-host "skref3"
     }
 
    
+    write-host "skref4"
     
-        $s = "$"
-    foreach($u in $csv)
+    $userscript = $createuserstring
+        $u = "$"
+    foreach($s in $Script:csv)
     {
+        $createuserstring = $userscript
+        if($cbNotenduricustomou.Checked -eq $true)
+        {
+                $sorter = $dropdownou.Text
+                $sorter = $s.$sorter
+                $createuserstring += " -Path OU=$sorter,OU=Notendur,DC=$domainname,DC=local "
+        }
 
+    
+         write-host "skref4.5"
+        foreach ($param in $parameters)
+        {
+      if($texts -contains $param)
+      {
+        $index = $texts.IndexOf($param)
+        $header = $dynamiclabels[$index].Text
+        $header = $header.Substring(0,$header.Length -1)
+        $createuserstring += " -"+$param.ToString()+" " +$s.$header+" "
+        
+      }   
+    }
+ 
 
         if($cboxsplitname.Checked -eq $true -and $cboxusername.checked -eq $True)
         {
             $name = $dynamiclabels[$texts.indexof("Name")].Text
             $name = $name.Substring(0,$name.Length -1)
-            $name = $u.$name
+            $name = $s.$name
 
             $split = splitname $name
-            $given = $split['Fornafn:']
-            $surname = $split['Eftirnafn:']
+            $given = $split['fornafn:']
+            $surname = $split['eftirnafn:']
             $samacc  = $split['username:']
 
-            $createuserstring += "-GivenName $given -Surname $surname -SamAccountName $samacc -DisplayName $name"
+             $createuserstring += " -GivenName " +"$given "+ " -Surname " +"$surname"+" -DisplayName "+ "$name "+ "-SamAccountName " + "$samacc"
 
 
         }
@@ -1288,18 +1306,22 @@ $creatusersbtn.add_Click({
         {
             $name = $dynamiclabels[$texts.indexof("Name")].Text
             $name = $name.Substring(0,$name.Length -1)
-            $name = $u.$name
+            $name = $s.$name
 
             $split = splitname $name
-            $given = $split['Fornafn:']
-            $surname = $split['Eftirnafn:']
+            $given = $split['fornafn:']
+            $surname = $split['eftirnafn:']
             $samacc  = $split['username:']
 
-            $createuserstring += "-GivenName $given -Surname $surname -DisplayName $name "
+            $createuserstring += " -GivenName " +"$given "+ " -Surname " +"$surname"+" -DisplayName "+ "$name "
 
         }
+           $createuserstring += " -enabled "+$u+"true"
+
+        write-host "skref5"
 
         
+
     if((Get-ADOrganizationalUnit -Filter { name -eq $sorter }).Name -ne $sorter)
     {
         New-ADOrganizationalUnit -Name $sorter -Path "OU=Notendur,DC=$domainname,DC=local" -ProtectedFromAccidentalDeletion $false
@@ -1307,10 +1329,10 @@ $creatusersbtn.add_Click({
         Add-ADGroupMember -Identity NotendurAllir -Members $sorter
 
         #Bý til möppuna
-        new-item $path\$sorter -ItemType Directory
+        new-item $($path + $sorter) -ItemType Directory
  
         #sæki núverandi réttindi
-        $rettindi = Get-Acl -Path $path\$sorter
+        $rettindi = Get-Acl -Path $($path + $sorter)
  
         #bý til þau réttindi sem ég ætla að bæta við möppuna
         $nyrettindi = New-Object System.Security.AccessControl.FileSystemAccessRule $domainname\$sorter,"Modify","Allow"
@@ -1320,29 +1342,26 @@ $creatusersbtn.add_Click({
         $rettindi.AddAccessRule($nyrettindi)
  
         #Set réttindin aftur á möppuna
-        Set-Acl -Path $path\$sorter $rettindi
+        Set-Acl -Path $($path + $sorter) $rettindi
  
         #Share-a möppunni
-        New-SmbShare -Name $sorter -Path $path\$sorter -FullAccess $domainname\$sorter, administrators 
-
+        New-SmbShare -Name $sorter -Path $($path + $sorter) -FullAccess "$domainname\$sorter", administrators 
         Add-Printer -Name $($sorter + " prentari") -Location $sorter -Shared -PortName LPT1: -Drivername "Brother Color Type3 Class Driver" -Published
-        $createuserstring += "`n Add-ADGroupMember -Identity $sorter -Members " + $s.ToString() + $samacc
-        write-host $createuserstring
-        $invoke = [Scriptblock]::Create($createuserstring)
-        $invoke.Invoke()
+
+       
         
     }
-    write-host $createuserstring
-
+     $createuserstring += "`n Add-ADGroupMember -Identity $sorter -Members " + $samacc
+     write-host "skref6"
+     Write-Host $createuserstring "`n"
+     $Script:test = $invoke
+     $invoke =  [Scriptblock]::Create($createuserstring)
+     $Script:test = $invoke
+     write-host "skref6.5"
     
     }
+    write-host "skref7"
     }
-    catch
-    {
-        villapopup -message $Error
-        Write-Host $Error 
-    }
-    
 
 
 
