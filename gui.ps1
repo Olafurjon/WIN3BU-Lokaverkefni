@@ -1,6 +1,5 @@
 ﻿Add-Type -AssemblyName System.Windows.Forms | Out-Null
 $Script:csv =  " "
-$Script:test =  " "
 
 #set þetta hér því af einhverri ástæðu festist þetta í 10% ef ég var með þetta innaní forminu
 $dhcp = Get-WindowsFeature -Name DHCP 
@@ -113,7 +112,10 @@ $fornafn = $fornafn.Substring(0,$fornafn.Length -1) #þessi skipun fjarlægir þ
 $eftirnafn = $nafnsplit[-1] #eftirnafnið er bara síðasta indexið í nafninu sem við splittuðum
 $samname = replaceISL -string $nafn #bless íslenskir stafir
 $samname = $samname.Replace(' ','.') #þar sem er bil er sett punktur
-
+$ok = $false
+$i = 1
+while($ok -eq $false)
+{
 if($samname.Length -gt 20) #ef að þetta er lengra en þessir 20 stafir þá bara týnum við aftasta út þangað til að við erum góðir
 {
     while ($samname.Length -gt 20)
@@ -124,6 +126,17 @@ if($samname.Length -gt 20) #ef að þetta er lengra en þessir 20 stafir þá ba
 if($samname[-1] -eq '.')
 {
     $samname = $samname.Substring(0,$samname.Length-1)
+}
+if((get-aduser -Filter {samaccountname -like $samname}) -eq $null )
+{
+$ok = $true
+
+}
+else {
+$samname.Substring(0, $samname.Length -2)
+$samname +=$i
+
+}
 }
 
 $samname = $samname.ToLower() #hendum í lowercase
@@ -239,7 +252,6 @@ $tabcontrol.Visible = $true
 $ctrlsmainform += $tabcontrol
 
 #endregion mainform og tabcontrol
-
 
 #region tab1
 
@@ -597,7 +609,6 @@ $tabpages += $tabpage1
 
 #endregion tabpage1
 
-
 #region tab2
 
 
@@ -889,10 +900,6 @@ for ($i = 1; $i -lt 20; $i++)
 $ctrlstabpage3 += $dynamiclabels 
 
 
-
-
-
-
 #checkbox
 $dynamiccbox = @()
 $cboxsplitname = checkboxmaker -text "Skipta Nafni í fornafn og eftirnafn" -location (300,60)
@@ -998,11 +1005,6 @@ foreach($box in $dynamiccbox)
 {
     $box.visible = $false
 }
-
-
-
-
-
 
 
 #buttons í tab3
@@ -1156,6 +1158,7 @@ for ($i = 0; $i -lt $csvheaders.Count; $i++)
 $ctrlstabpage3 += $importcsvbtn
 
 $creatusersbtn.add_Click({
+try{
 write-host "skref1"
     $texts = @()
     $messages = @()
@@ -1173,6 +1176,10 @@ write-host "skref1"
     {
         Villapopup -message "Þú átt enn eftir að velja parameter fyrir reit"
     }
+    if($dropdownou.Text.Length -eq 0)
+    {
+        villapopup -message "OU skipuleggjari má ekki vera tómur"
+    }
     else {
     write-host "skref2"
     $createuserstring = "New-ADUser"
@@ -1188,7 +1195,7 @@ write-host "skref1"
     $u = "$"
     $header = ""
 
-    #$createuserstring += " -UserPrincipalName $($n.Notendanafn + "@"+$domainname+".Local")"
+    
     $checksg = ""
     
 
@@ -1204,11 +1211,6 @@ write-host "skref1"
 
 
     }
-
-
-        Write-Host $createuserstring
-        villapopup -message $sorter
-
 
         if($cbNotendurogsg.Checked -eq $true)
         {
@@ -1247,9 +1249,12 @@ write-host "skref1"
 
             if($prentarar.checked -eq $True)
             {
-                Add-PrinterDriver -Name "Brother Color Type3 Class Driver" #setur inn driver fyrir prentarann ef allir eru að nota sama kemur það upp sem bara 1 prentari og þarf að hægri smella á hann til að fá hina upp, svo það er hægt að harðkóða aðra driveraa inn
+                Add-PrinterDriver -Name "Brother Color Type3 Class Driver" -ErrorAction Ignore #setur inn driver fyrir prentarann ef allir eru að nota sama kemur það upp sem bara 1 prentari og þarf að hægri smella á hann til að fá hina upp, svo það er hægt að harðkóða aðra driveraa inn 
+                $messages += $Error.ToString()
+                $error.Clear()
                 Add-Printer -Name "Sameign prentari2" -Location "Sameign" -Shared -PortName LPT1: -Drivername "Brother Color Type3 Class Driver"-ErrorAction Ignore  -Published  #býr til sameigna prentarann og share-ar
-
+                $messages += $Error.ToString()
+                $error.Clear()
 
             }
 
@@ -1264,26 +1269,29 @@ write-host "skref1"
     foreach($s in $Script:csv)
     {
         $createuserstring = $userscript
-        if($cbNotenduricustomou.Checked -eq $true)
-        {
-                $sorter = $dropdownou.Text
-                $sorter = $s.$sorter
-                $createuserstring += " -Path OU=$sorter,OU=Notendur,DC=$domainname,DC=local "
-        }
+
 
     
          write-host "skref4.5"
         foreach ($param in $parameters)
         {
-      if($texts -contains $param)
-      {
-        $index = $texts.IndexOf($param)
-        $header = $dynamiclabels[$index].Text
-        $header = $header.Substring(0,$header.Length -1)
-        $createuserstring += " -"+$param.ToString()+" " +$s.$header+" "
+          if($texts -contains $param)
+          {
+            $index = $texts.IndexOf($param)
+            $header = $dynamiclabels[$index].Text
+            $header = $header.Substring(0,$header.Length -1)
+            $createuserstring += " -"+$param.ToString()+" '" +$($s.$header.ToString())+"' "
         
-      }   
+          }   
     }
+
+       if($cbNotenduricustomou.Checked -eq $true)
+        {
+                $domainname = $domainname.ToString()
+                $sorter = $dropdownou.Text
+                $sorter = $s.$sorter
+                $createuserstring += " -Path '"+ $("OU=$sorter,OU=Notendur,DC=$domainname,DC=local") + "'"
+        }
  
 
         if($cboxsplitname.Checked -eq $true -and $cboxusername.checked -eq $True)
@@ -1297,7 +1305,8 @@ write-host "skref1"
             $surname = $split['eftirnafn:']
             $samacc  = $split['username:']
 
-             $createuserstring += " -GivenName " +"$given "+ " -Surname " +"$surname"+" -DisplayName "+ "$name "+ "-SamAccountName " + "$samacc"
+            $createuserstring += " -GivenName '" +$($given.toString())+ "' -Surname '" +$($surname.toString())+"' -DisplayName '"+ $($name.toString())+ "' -SamAccountName '" + $($samacc.toString()+"'")
+            $createuserstring += " -UserPrincipalName $samacc@$domainname.Local"
 
 
         }
@@ -1313,8 +1322,13 @@ write-host "skref1"
             $surname = $split['eftirnafn:']
             $samacc  = $split['username:']
 
-            $createuserstring += " -GivenName " +"$given "+ " -Surname " +"$surname"+" -DisplayName "+ "$name "
+            $createuserstring += " -GivenName '" +$($given.toString())+ "' -Surname '" +$($surname.toString())+"' -DisplayName '"+ $($name.toString())+ "'"
 
+        }
+
+        if($cboxdefaultpass.Checked -eq $true)
+        {
+            $createuserstring += " -AccountPassword (ConvertTo-SecureString -AsPlainText 'pass.123' -Force) "
         }
            $createuserstring += " -enabled "+$u+"true"
 
@@ -1322,14 +1336,17 @@ write-host "skref1"
 
         
 
-    if((Get-ADOrganizationalUnit -Filter { name -eq $sorter }).Name -ne $sorter)
-    {
+        if((Get-ADOrganizationalUnit -Filter { name -eq $sorter }).Name -ne $sorter)
+        {
         New-ADOrganizationalUnit -Name $sorter -Path "OU=Notendur,DC=$domainname,DC=local" -ProtectedFromAccidentalDeletion $false
         New-ADGroup -Name $sorter -Path $("OU=" + $sorter + ",OU=Notendur,DC=$domainname,DC=local") -GroupScope Global
         Add-ADGroupMember -Identity NotendurAllir -Members $sorter
 
         #Bý til möppuna
-        new-item $($path + $sorter) -ItemType Directory
+        new-item $($path + $sorter) -ItemType Directory -ErrorAction SilentlyContinue
+        $messages += $Error.ToString()
+        $error.Clear()
+
  
         #sæki núverandi réttindi
         $rettindi = Get-Acl -Path $($path + $sorter)
@@ -1345,24 +1362,41 @@ write-host "skref1"
         Set-Acl -Path $($path + $sorter) $rettindi
  
         #Share-a möppunni
-        New-SmbShare -Name $sorter -Path $($path + $sorter) -FullAccess "$domainname\$sorter", administrators 
-        Add-Printer -Name $($sorter + " prentari") -Location $sorter -Shared -PortName LPT1: -Drivername "Brother Color Type3 Class Driver" -Published
+        New-SmbShare -Name $sorter -Path $($path + $sorter) -FullAccess "$domainname\$sorter", administrators -ErrorAction SilentlyContinue
+        $messages += $Error.ToString()
+        $error.Clear()
+
+
+        Add-Printer -Name $($sorter + " prentari") -Location $sorter -Shared -PortName LPT1: -ErrorAction SilentlyContinue -Drivername "Brother Color Type3 Class Driver" -Published 
+        $messages += $Error
+        $error.Clear()
 
        
         
     }
-     $createuserstring += "`n Add-ADGroupMember -Identity $sorter -Members " + $samacc
-     write-host "skref6"
-     Write-Host $createuserstring "`n"
-     $Script:test = $invoke
-     $invoke =  [Scriptblock]::Create($createuserstring)
-     $Script:test = $invoke
+         $createuserstring += "`n Add-ADGroupMember -Identity $sorter -Members " + $samacc
+         write-host "skref6"
+         Write-Host $createuserstring "`n"
+         $invoke = [Scriptblock]::Create($createuserstring)
+         $invoke.Invoke()
+ 
+     
+
      write-host "skref6.5"
     
     }
     write-host "skref7"
     }
-
+}
+catch{
+$Error
+}
+finally{
+foreach ($item in $messages)
+{
+    write-host $item.toString() + "`n"
+}
+}
 
 
 
@@ -1389,7 +1423,7 @@ $tooltipcontrol = New-Object System.Windows.Forms.ToolTip
 $tooltipcontrol.SetToolTip($tab1tbnnetkort,"Breyttu Netkortsupplýsingum")
 $tooltipcontrol.SetToolTip($tab1lbldomname,"Sláðu inn domain nafnið, .local er bætt við sjálfkrara")
 $tooltipcontrol.SetToolTip($tab1btndomain,"Búa til domainið")
-$tooltipcontrol.SetToolTip($tab2txtscopenafn,"Má vera hvað sem ver")
+$tooltipcontrol.SetToolTip($tab2txtscopenafn,"Má vera hvað sem er")
 $tooltipcontrol.SetToolTip($tab2txtscopestart,"t.d. 192.168.1.50")
 $tooltipcontrol.SetToolTip($tab2txtscopeend,"t.d. 192.168.1.150")
 $tooltipcontrol.SetToolTip($tab2txtsubmask,"t.d 255.255.255.0")
