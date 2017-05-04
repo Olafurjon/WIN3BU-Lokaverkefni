@@ -133,7 +133,7 @@ if($samname.Contains("..")){$samname =  $samname.Replace("..",'.')} #ef hann hei
 
 if((get-aduser -Filter {samaccountname -like $samname} -Properties samaccountname) -ne $null )
 {
-$samname.Substring(0, $samname.Length -2)
+$samname = $samname.Substring(0, $samname.Length -2)
 $samname += $i.ToString()
 
 }
