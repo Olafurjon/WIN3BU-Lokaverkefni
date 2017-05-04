@@ -43,6 +43,7 @@ return $label
 
 
 }
+
 function replaceISL {
  param( 
  [Parameter(Mandatory=$true)]
@@ -108,15 +109,14 @@ $eftirnafn = $null
 $info = @{} #skilast sem hastafla sem kallar þá bara í fornafn: eftirnafn: usernafn: eftir þvúi hvað við á
 $fornafn = $null
 $nafnsplit = $nafn.Split() #splitta array til að vinna með
-    for ($i = 0; $i -ne $nafnsplit.Length -1 ; $i++){$fornafn += $nafnsplit[$i] + " " } #þessi forlúppa byr til fornafnið
+for ($i = 0; $i -ne $nafnsplit.Length -1 ; $i++){$fornafn += $nafnsplit[$i] + " " } #þessi forlúppa byr til fornafnið
 $fornafn = $fornafn.Substring(0,$fornafn.Length -1) #þessi skipun fjarlægir þetta auka bil sem ég bjó til með forloopunni
 $eftirnafn = $nafnsplit[-1] #eftirnafnið er bara síðasta indexið í nafninu sem við splittuðum
 $samname = replaceISL -string $nafn #bless íslenskir stafir
 $samname = $samname.Replace(' ','.') #þar sem er bil er sett punktur
 $ok = $false
 $i = 1
-while($ok -eq $false)
-{
+
 if($samname.Length -gt 20) #ef að þetta er lengra en þessir 20 stafir þá bara týnum við aftasta út þangað til að við erum góðir
 {
     while ($samname.Length -gt 20)
@@ -128,16 +128,14 @@ if($samname[-1] -eq '.')
 {
     $samname = $samname.Substring(0,$samname.Length-1)
 }
-if((get-aduser -Filter {samaccountname -like $samname} -Properties samaccountname) -eq $null )
+if($samname.Contains("..")){$samname =  $samname.Replace("..",'.')} #ef hann heitir Jón k. Jónsson þá kemur þetta í veg fyrir að það komi sem jon.k..jonsson
+
+
+if((get-aduser -Filter {samaccountname -like $samname} -Properties samaccountname) -ne $null )
 {
-$ok = $true
-
-}
-else {
 $samname.Substring(0, $samname.Length -2)
-$samname +=$i
+$samname += $i.ToString()
 
-}
 }
 
 $samname = $samname.ToLower() #hendum í lowercase
@@ -1210,6 +1208,10 @@ write-host "skref1"
 
                 New-ADOrganizationalUnit -Name Notendur -ProtectedFromAccidentalDeletion $false 
             }
+            else
+            {
+                $messages += "Notendur OU var nú þegar til, bætt var bara við það"
+            }
 
             if($Securitygroups.Checked -eq $true)
             {
@@ -1218,6 +1220,10 @@ write-host "skref1"
                 if($checksg -eq $null)
                 {
                     New-ADGroup -Name NotendurAllir -Path "OU=Notendur,DC=$domainname,DC=local" -GroupScope Global 
+                }
+                else
+                {
+                    $messages += "NotendurAllir Security Group var nú þegar til, Notendum bætt í hann"
                 }
             }
 
@@ -1230,7 +1236,7 @@ write-host "skref1"
                     $nyrettindi = New-Object System.Security.AccessControl.FileSystemAccessRule "$domainname\NotendurAllir",'Modify','Allow' 
                     $rettindi.AddAccessRule($nyrettindi)
                     Set-Acl -Path "$path\Sameign" $rettindi 
-                    New-SmbShare -Name "Sameign" -Path "$path\Sameign" -FullAccess "$domainname\NotendurAllir", administrators 
+                    New-SmbShare -Name "Sameign" -Path "$path\Sameign" -FullAccess "$domainname\NotendurAllir", administrators -ErrorAction SilentlyContinue
                 }
             }
 
@@ -1256,8 +1262,6 @@ write-host "skref1"
     write-host $i
         $createuserstring = $userscript
 
-
-    
          write-host "skref4.5"
         foreach ($param in $parameters)
         {
@@ -1287,6 +1291,7 @@ write-host "skref1"
             $name = $s.$name
 
             $split = nafnareglur $name
+            $split
             $given = $split['fornafn:']
             $surname = $split['eftirnafn:']
             $samacc  = $split['username:']
@@ -1341,9 +1346,8 @@ write-host "skref1"
 
         #Bý til möppuna
         
-        $check = Test-path "$path\$sorter"
-        write-host $check
-        if($check -eq $false)
+        
+        if((Test-path "$path\$sorter") -eq $false)
         {
         new-item "$path\$sorter" -ItemType Directory
 
@@ -1366,7 +1370,7 @@ write-host "skref1"
         New-SmbShare -Name $sorter -Path "$path\$sorter" -FullAccess "$domainname\$sorter", administrators
 
         }
-        elseif($check -eq $true)
+        elseif((Test-path "$path\$sorter") -eq $true)
         {
             $messages += "Mappan fyrir $sorter var þegar til"
         }
@@ -1394,7 +1398,7 @@ write-host "skref1"
          {
             $createuserstring += "`n Add-ADGroupMember -Identity $sorter -Members '" + $username + "'"
          }
-         else
+         if($cboxusername.Checked -eq $false -and $cboxusername2.checked -eq $false)
          {
             $samacc = $dynamiclabels[$texts.indexof("SamAccountName")].Text
             $samacc = $samacc.Substring(0,$samacc.Length -1)
