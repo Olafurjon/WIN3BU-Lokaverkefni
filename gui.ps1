@@ -1,8 +1,9 @@
 ﻿Add-Type -AssemblyName System.Windows.Forms | Out-Null
 $Script:csv =  " "
+$Script:path =  " "
 
 #set þetta hér því af einhverri ástæðu festist þetta í 10% ef ég var með þetta innaní forminu
-$dhcp = Get-WindowsFeature -Name DHCP 
+$dhcp = Get-WindowsFeature -Name DHCP | Select-Object -Property installed
 if($dhcp.Installed -eq $false)
 {
 Install-WindowsFeature –Name DHCP –IncludeManagementTools | Out-Null
@@ -127,7 +128,7 @@ if($samname[-1] -eq '.')
 {
     $samname = $samname.Substring(0,$samname.Length-1)
 }
-if((get-aduser -Filter {samaccountname -like $samname}) -eq $null )
+if((get-aduser -Filter {samaccountname -like $samname} -Properties samaccountname) -eq $null )
 {
 $ok = $true
 
@@ -342,7 +343,7 @@ finally{
 write-host $message
 }
 $combo.Items.Clear()
-$allnets = Get-NetIPConfiguration -Detailed
+$allnets = Get-NetIPConfiguration -detailed | Select-Object -Property InterfaceAlias, DNSServer
 $net = @()
 foreach($n in $allnets){
 if($n.InterfaceAlias -like "*Loopback Pseudo-Interface*")
@@ -383,7 +384,7 @@ $netform.Close()
 $combo = New-Object System.Windows.Forms.ComboBox
 $combo.Size = New-Object System.Drawing.Size(190,25)
 $combo.DropDownStyle = "DropDownList"
-$allnets = Get-NetIPConfiguration -Detailed
+$allnets = Get-NetIPConfiguration -Detailed | Select-Object -Property InterfaceAlias, DNSServer,PrefixLength,interfaceindex,ipv4address
 $net = @()
 foreach($n in $allnets){
 if($n.InterfaceAlias -like "*Loopback Pseudo-Interface*")
@@ -529,6 +530,7 @@ foreach($item in $ctrlnetform)
 
 
 #endregion
+
 #RichTexBox í tab1
 $rtbtab1 = New-Object System.Windows.Forms.RichTextBox
 $rtbtab1.ReadOnly = $true
@@ -617,7 +619,7 @@ $tabpage2 = New-Object System.Windows.Forms.TabPage
 $tabpage2.Text = "DHCP Scope + domainvélar"
 $tabpage2.add_Enter({
 
-
+[System.GC]::Collect()
 $mainform.ClientSize = New-Object System.Drawing.Size(800,500)
 $tabcontrol.ClientSize = $mainform.ClientSize
 }) 
@@ -635,11 +637,11 @@ $datagrid.Columns[4].Name = "InUse"
 $datagrid.SelectionMode = "FullRowSelect"
 function datagridinfo {
 $datagrid.Rows.Clear()
-$scope = Get-DhcpServerv4Scope
+$scope = Get-DhcpServerv4Scope | Select-Object -Property Name,Startrange,State,ScopeId
 for ($i = -1; $i -lt $scope.Count; $i++)
 { 
     $scopeid = $scope[$i].ScopeId
-    $scopestats = Get-DhcpServerv4ScopeStatistics -ScopeId $scopeid
+    $scopestats = Get-DhcpServerv4ScopeStatistics -ScopeId $scopeid | Select-Object -Property free, inuse
     $scopestats.Free
     
     $row = @($scope[$i].Name, $scope[$i].StartRange, $scope[$i].State,$scopestats.Free,$scopestats.InUse)
@@ -666,7 +668,7 @@ $datagrid2.SelectionMode = "FullRowSelect"
 
 function datagridinfo2 {
 $datagrid2.Rows.Clear()
-$adcomputers = Get-ADComputer -Filter * -properties *
+$adcomputers = Get-ADComputer -Filter * -properties name,ipv4Address,OperatingSystem,Enabled
 foreach($computer in $adcomputers){
     $row = @($computer.Name, $computer.IPv4Address, $computer.OperatingSystem, $computer.Enabled)
     $datagrid2.Rows.Add($row)
@@ -767,7 +769,7 @@ $tab2btnadddomain.add_Click({
     else{
         $Error.Clear()
         try{
-            $domain = get-addomain
+            $domain = get-addomain | Select-Object -Property DNSroot
             $dnslocal = $domain.DNSroot
         
             Add-Computer -ComputerName $cp -LocalCredential "$cp\Administrator" -DomainName $domain.DNSRoot -Credential "$dnslocal\Administrator" -Restart -Force 
@@ -820,7 +822,7 @@ $tab2btnscope.add_Click({
     {
     $error.Clear()
     try {
-        $domain = Get-ADDomain
+        $domain = Get-ADDomain | Select-Object -Property Forest
     
         Add-DhcpServerv4Scope -Name $scopename -StartRange $ipstart -EndRange $ipend -SubnetMask $subnet #setur upp dhcp scope
         Set-DhcpServerv4OptionValue -DnsServer $dns -Router $dns #oft iptala serversins
@@ -853,6 +855,7 @@ $tabpages += $tabpage2
 $tabpage3 = New-Object System.Windows.Forms.TabPage
 $tabpage3.Text = "Notendur og Möppur"
 $tabpage3.add_Enter({
+[System.GC]::Collect()
 $mainform.ClientSize = New-Object System.Drawing.Size(800,500)
 $tabcontrol.ClientSize = $mainform.ClientSize
 })
@@ -945,7 +948,7 @@ $dynamiccbox += $dropdownou
 $oucheck = ""
 $cbNotendurogsg = checkboxmaker -text "Búa til/setja í Notendur OU og Group" -location (300,160)
 $cbNotendurogsg.Checked = $true
-$oucheck = Get-ADOrganizationalUnit -Filter {name -like "Notendur"} -Properties *
+$oucheck = Get-ADOrganizationalUnit -Filter {name -like "Notendur"} -Properties name
 $cbNotendurogsg.add_CheckedChanged({
 if($cbNotendurogsg.Checked -eq $false)
 {
@@ -986,7 +989,7 @@ $moppur.add_CheckedChanged({
         $null = $browser.ShowDialog()
         $path = $browser.SelectedPath
         $path =  $path.ToString()
-        $path = [string]$path
+        $Script:path = $path
     
     }
 })
@@ -1061,7 +1064,7 @@ $drop.SelectedIndex = -1
 $drop.Items.Clear()
 }
 
-    $command = Get-Command -Name new-aduser 
+    $command = Get-Command -Name new-aduser | Select-Object -Property Parameters
     $commandkeys = $command.Parameters.Keys
     $parameters = @()
     $badword = @("Verbose","Credential","Debug","ErrorAction","WarningVariable","WarningAction","ErrorVariable","OutVariable","OutBuffer","PipelineVariable","Whatif","Confirm","AllowReversiblePasswordEncryption","Certificates","AuthType","TrustedForDelegation","SmartCardLogonRequired","KerberosEncryptionType","Instance","AuthenticationPolicySilo","AuthenticationPolicy","AccountNotDelegated")
@@ -1158,11 +1161,11 @@ for ($i = 0; $i -lt $csvheaders.Count; $i++)
 $ctrlstabpage3 += $importcsvbtn
 
 $creatusersbtn.add_Click({
-try{
+
 write-host "skref1"
     $texts = @()
     $messages = @()
-    $domain = get-addomain
+    $domain = get-addomain | Select-Object -Property name
     $domainname = $domain.Name
     foreach($text in $dynamicdrop) 
     {
@@ -1182,8 +1185,9 @@ write-host "skref1"
     }
     else {
     write-host "skref2"
+    $path = $Script:path
     $createuserstring = "New-ADUser"
-    $command = Get-Command -Name new-aduser 
+    $command = Get-Command -Name new-aduser | Select-Object -Property Parameters
     $commandkeys = $command.Parameters.Keys
     $parameters = @()
     $badword = @("Verbose","Credential","Debug","ErrorAction","WarningVariable","WarningAction","ErrorVariable","OutVariable","OutBuffer","PipelineVariable","Whatif","Confirm","AllowReversiblePasswordEncryption","Certificates","AuthType","TrustedForDelegation","SmartCardLogonRequired","KerberosEncryptionType","Instance","AuthenticationPolicySilo","AuthenticationPolicy","AccountNotDelegated")
@@ -1223,7 +1227,7 @@ write-host "skref1"
             if($Securitygroups.Checked -eq $true)
             {
 
-                $checksg = Get-ADGroup -Filter {name -like "NotendurAllir"}
+                $checksg = Get-ADGroup -Filter {name -like "NotendurAllir"} -Properties name
                 if($checksg -eq $null)
                 {
                     New-ADGroup -Name NotendurAllir -Path "OU=Notendur,DC=$domainname,DC=local" -GroupScope Global 
@@ -1233,15 +1237,15 @@ write-host "skref1"
             if($moppur.checked -eq $True)
             {           
 
-                $checkpath = test-path $($path + "Sameign")
+                $checkpath = test-path "$path\sameign"
                 if($checksg -eq $False)
                 {
-                    new-item $($path + "Sameign") -ItemType Directory 
-                    $rettindi = Get-Acl -Path $($path + "Sameign") 
+                    new-item "$path\sameign" -ItemType Directory 
+                    $rettindi = Get-Acl -Path "$path\sameign"
                     $nyrettindi = New-Object System.Security.AccessControl.FileSystemAccessRule "$domainname\NotendurAllir",'Modify','Allow' 
                     $rettindi.AddAccessRule($nyrettindi)
-                    Set-Acl -Path $($path + "Sameign") $rettindi 
-                    New-SmbShare -Name "Sameign" -Path $($path + "Sameign") -FullAccess "$domainname\NotendurAllir", administrators 
+                    Set-Acl -Path "$path\sameign" $rettindi 
+                    New-SmbShare -Name "Sameign" -Path "$path\sameign" -FullAccess "$domainname\NotendurAllir", administrators 
 
        
                 }
@@ -1266,8 +1270,11 @@ write-host "skref1"
     
     $userscript = $createuserstring
         $u = "$"
+        $i = 1
     foreach($s in $Script:csv)
     {
+    $i++
+    write-host $i
         $createuserstring = $userscript
 
 
@@ -1305,8 +1312,8 @@ write-host "skref1"
             $surname = $split['eftirnafn:']
             $samacc  = $split['username:']
 
-            $createuserstring += " -GivenName '" +$($given.toString())+ "' -Surname '" +$($surname.toString())+"' -DisplayName '"+ $($name.toString())+ "' -SamAccountName '" + $($samacc.toString()+"'")
-            $createuserstring += " -UserPrincipalName $samacc@$domainname.Local"
+            $createuserstring += " -GivenName '" + $given + "' -Surname '" + $surname+"' -DisplayName '"+ $name+ "' -SamAccountName '" + $samacc + "'"
+            $createuserstring += " -UserPrincipalName '$samacc@$domainname.Local'"
 
 
         }
@@ -1322,7 +1329,7 @@ write-host "skref1"
             $surname = $split['eftirnafn:']
             $samacc  = $split['username:']
 
-            $createuserstring += " -GivenName '" +$($given.toString())+ "' -Surname '" +$($surname.toString())+"' -DisplayName '"+ $($name.toString())+ "'"
+            $createuserstring += " -GivenName '" + $given + "' -Surname '" + $surname+"' -DisplayName '"+ $name+ "'"
 
         }
 
@@ -1338,18 +1345,23 @@ write-host "skref1"
 
         if((Get-ADOrganizationalUnit -Filter { name -eq $sorter }).Name -ne $sorter)
         {
+        villapopup -message  "$path\$sorter"
         New-ADOrganizationalUnit -Name $sorter -Path "OU=Notendur,DC=$domainname,DC=local" -ProtectedFromAccidentalDeletion $false
         New-ADGroup -Name $sorter -Path $("OU=" + $sorter + ",OU=Notendur,DC=$domainname,DC=local") -GroupScope Global
         Add-ADGroupMember -Identity NotendurAllir -Members $sorter
 
         #Bý til möppuna
-        new-item $($path + $sorter) -ItemType Directory -ErrorAction SilentlyContinue
-        $messages += $Error.ToString()
-        $error.Clear()
+        
+        $check = Test-path "$path\$sorter"
+        write-host $check
+        if($check -eq $false)
+        {
+        new-item "$path\$sorter" -ItemType Directory
+
 
  
         #sæki núverandi réttindi
-        $rettindi = Get-Acl -Path $($path + $sorter)
+        $rettindi = Get-Acl -Path "$path\$sorter"
  
         #bý til þau réttindi sem ég ætla að bæta við möppuna
         $nyrettindi = New-Object System.Security.AccessControl.FileSystemAccessRule $domainname\$sorter,"Modify","Allow"
@@ -1359,12 +1371,16 @@ write-host "skref1"
         $rettindi.AddAccessRule($nyrettindi)
  
         #Set réttindin aftur á möppuna
-        Set-Acl -Path $($path + $sorter) $rettindi
+        Set-Acl -Path "$path\$sorter" $rettindi
  
         #Share-a möppunni
-        New-SmbShare -Name $sorter -Path $($path + $sorter) -FullAccess "$domainname\$sorter", administrators -ErrorAction SilentlyContinue
-        $messages += $Error.ToString()
-        $error.Clear()
+        New-SmbShare -Name $sorter -Path "$path\$sorter" -FullAccess "$domainname\$sorter", administrators
+
+        }
+        elseif($check -eq $true)
+        {
+            $messages += "Mappan fyrir $sorter var þegar til"
+        }
 
 
         Add-Printer -Name $($sorter + " prentari") -Location $sorter -Shared -PortName LPT1: -ErrorAction SilentlyContinue -Drivername "Brother Color Type3 Class Driver" -Published 
@@ -1387,16 +1403,7 @@ write-host "skref1"
     }
     write-host "skref7"
     }
-}
-catch{
-$Error
-}
-finally{
-foreach ($item in $messages)
-{
-    write-host $item.toString() + "`n"
-}
-}
+
 
 
 
