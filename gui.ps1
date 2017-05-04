@@ -940,7 +940,7 @@ $dynamiccbox += $cboxusername2
 $ctrlstabpage3 += $cboxusername2 
 
 $dropdownou = New-Object System.Windows.Forms.ComboBox
-$dropdownou.Location = New-Object System.Drawing.Size (450,180)
+$dropdownou.Location = New-Object System.Drawing.Size (460,180)
 
 $ctrlstabpage3 += $dropdownou
 $dynamiccbox += $dropdownou
@@ -1022,12 +1022,12 @@ $importcsvbtn = buttonmaker -text "Smelltu til að velja CSV skrá" -location (9
 $importcsvbtn.Size = New-Object System.Drawing.Size (200,25)
 $importcsvbtn.add_Click({
     $csvpath = Get-FileName($initialDirectory)
-    $csv = Import-Csv -Path $csvpath -Delimiter ','
+    $csv = Import-Csv -Path $csvpath -Delimiter ',' -Encoding Default
     $Script:csv = $csv
     $csvheaders = $csv | Get-Member -MemberType NoteProperty
     if($csvheaders.count -le 1)
     {
-        $csv = Import-Csv -Path $csvpath -Delimiter ';'
+        $csv = Import-Csv -Path $csvpath -Delimiter ';' -Encoding Default
         $Script:csv = $csv
         $csvheaders = $csv | Get-Member -MemberType NoteProperty
     }
@@ -1203,19 +1203,6 @@ write-host "skref1"
     $checksg = ""
     
 
-    function splitname
-    {
-    param(
-    [Parameter(Mandatory)]
-    $name
-    )
-
-    $name = Nafnareglur $name
-    return $name
-
-
-    }
-
         if($cbNotendurogsg.Checked -eq $true)
         {
         
@@ -1236,29 +1223,21 @@ write-host "skref1"
 
             if($moppur.checked -eq $True)
             {           
-
-                $checkpath = test-path "$path\sameign"
-                if($checksg -eq $False)
+                if((test-path "$path\sameign") -eq $False)
                 {
-                    new-item "$path\sameign" -ItemType Directory 
-                    $rettindi = Get-Acl -Path "$path\sameign"
+                    new-item "$path\Sameign" -ItemType Directory 
+                    $rettindi = Get-Acl -Path "$path\Sameign"
                     $nyrettindi = New-Object System.Security.AccessControl.FileSystemAccessRule "$domainname\NotendurAllir",'Modify','Allow' 
                     $rettindi.AddAccessRule($nyrettindi)
-                    Set-Acl -Path "$path\sameign" $rettindi 
-                    New-SmbShare -Name "Sameign" -Path "$path\sameign" -FullAccess "$domainname\NotendurAllir", administrators 
-
-       
+                    Set-Acl -Path "$path\Sameign" $rettindi 
+                    New-SmbShare -Name "Sameign" -Path "$path\Sameign" -FullAccess "$domainname\NotendurAllir", administrators 
                 }
             }
 
             if($prentarar.checked -eq $True)
             {
                 Add-PrinterDriver -Name "Brother Color Type3 Class Driver" -ErrorAction Ignore #setur inn driver fyrir prentarann ef allir eru að nota sama kemur það upp sem bara 1 prentari og þarf að hægri smella á hann til að fá hina upp, svo það er hægt að harðkóða aðra driveraa inn 
-                $messages += $Error.ToString()
-                $error.Clear()
                 Add-Printer -Name "Sameign prentari2" -Location "Sameign" -Shared -PortName LPT1: -Drivername "Brother Color Type3 Class Driver"-ErrorAction Ignore  -Published  #býr til sameigna prentarann og share-ar
-                $messages += $Error.ToString()
-                $error.Clear()
 
             }
 
@@ -1307,7 +1286,7 @@ write-host "skref1"
             $name = $name.Substring(0,$name.Length -1)
             $name = $s.$name
 
-            $split = splitname $name
+            $split = nafnareglur $name
             $given = $split['fornafn:']
             $surname = $split['eftirnafn:']
             $samacc  = $split['username:']
@@ -1324,7 +1303,7 @@ write-host "skref1"
             $name = $name.Substring(0,$name.Length -1)
             $name = $s.$name
 
-            $split = splitname $name
+            $split = nafnareglur $name
             $given = $split['fornafn:']
             $surname = $split['eftirnafn:']
             $samacc  = $split['username:']
@@ -1337,6 +1316,17 @@ write-host "skref1"
         {
             $createuserstring += " -AccountPassword (ConvertTo-SecureString -AsPlainText 'pass.123' -Force) "
         }
+        if($cboxusername2.Checked -eq $true)
+        {
+            $name = $dynamiclabels[$texts.indexof("Name")].Text
+            $name = $name.Substring(0,$name.Length -1)
+            $name = $s.$name
+            $username = $name.split(" ")
+            $username = replaceIsl $username[0]
+            $username = "$username"+$i
+            $createuserstring += " -SamAccountName $username "
+
+        }
            $createuserstring += " -enabled "+$u+"true"
 
         write-host "skref5"
@@ -1345,7 +1335,6 @@ write-host "skref1"
 
         if((Get-ADOrganizationalUnit -Filter { name -eq $sorter }).Name -ne $sorter)
         {
-        villapopup -message  "$path\$sorter"
         New-ADOrganizationalUnit -Name $sorter -Path "OU=Notendur,DC=$domainname,DC=local" -ProtectedFromAccidentalDeletion $false
         New-ADGroup -Name $sorter -Path $("OU=" + $sorter + ",OU=Notendur,DC=$domainname,DC=local") -GroupScope Global
         Add-ADGroupMember -Identity NotendurAllir -Members $sorter
@@ -1383,30 +1372,49 @@ write-host "skref1"
         }
 
 
+        if((get-printer | Where-Object -Property name -eq $($sorter + "prentari")) -eq $null)
+        {
         Add-Printer -Name $($sorter + " prentari") -Location $sorter -Shared -PortName LPT1: -ErrorAction SilentlyContinue -Drivername "Brother Color Type3 Class Driver" -Published 
-        $messages += $Error
-        $error.Clear()
+        }
+        else
+        {
+        $messages += "prentari fyrir $sorter var þegar til"
+        }
+
 
        
         
     }
-         $createuserstring += "`n Add-ADGroupMember -Identity $sorter -Members " + $samacc
-         write-host "skref6"
-         Write-Host $createuserstring "`n"
-         $invoke = [Scriptblock]::Create($createuserstring)
-         $invoke.Invoke()
+        
+         if($cboxusername.Checked -eq $true)
+         {
+            $createuserstring += "`n Add-ADGroupMember -Identity $sorter -Members '" + $samacc +"'"
+         }
+         if($cboxusername2.checked -eq $true)
+         {
+            $createuserstring += "`n Add-ADGroupMember -Identity $sorter -Members '" + $username + "'"
+         }
+         else
+         {
+            $samacc = $dynamiclabels[$texts.indexof("SamAccountName")].Text
+            $samacc = $samacc.Substring(0,$samacc.Length -1)
+            $samacc = $s.$samacc
+            $createuserstring += "`n Add-ADGroupMember -Identity $sorter -Members '" + $samacc + "'"
+         }
+         
+         write-host $createuserstring
+         [Scriptblock]::Create($createuserstring).Invoke()
  
-     
 
      write-host "skref6.5"
     
     }
+    foreach ($message in $messages)
+    {
+     Write-Host $message   
+    }
     write-host "skref7"
     }
-
-
-
-
 
 })
 
