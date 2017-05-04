@@ -12,4 +12,5 @@ Lokaverkefni Fyrir WIN3BU Powershell áfangi þar sem manni er kynnt fyrir að n
 23/4/17 - commit<br>
 Lenti í veseni með að fá réttan kóða út úr þessu, og eftir ég náðí að raða þessu þannig þá las kóðinn út það sem ég vildi ss. $s.xxxxx nema mér til undrunar las scriptblock það sem streng en convertaði ekki í foreach value-ið þannig ég þurfti að endurhugsa þetta aðeins...<br>
 03/05/17 - kóðinn skilar sér eðlilega fyrir hvern notenda en þegar þetta er keyrt þá crashar forritið við creation á notendum... <br> 
-04/05/17 - Kóðinn býr til notendur eðlilega, prentara eðlilega, möppur eðlilega, grouppur eðlilega, nema forritið í keyrslu er að nota 200mb+ af ram, eftir smá endurröðun á kóða fer það niður í 160-180 og forrit krassar minna, náði 550 notendum inn af 1500, ætla athuga hvort það lagist við að gera kóðan "hreinni"
+04/05/17 - Kóðinn býr til notendur eðlilega, prentara eðlilega, möppur eðlilega, grouppur eðlilega, nema forritið í keyrslu er að nota 200mb+ af ram, eftir smá endurröðun á kóða fer það niður í 160-180 og forrit krassar minna, náði 550 notendum inn af 1500, ætla athuga hvort það lagist við að gera kóðan "hreinni" <br>
+04/05/17 - virknin er tilstaðar virkaði með minni csv skrám en þessi stóra virðist feila eftir 500+ notendur, en allt undir það virkar vel, held áfram að skoða lausnir síðar
