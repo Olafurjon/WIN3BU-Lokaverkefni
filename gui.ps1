@@ -10,6 +10,9 @@ Install-WindowsFeature –Name DHCP –IncludeManagementTools | Out-Null
 }
 
 #býr til label með staðsettum texta og staðsetningu
+
+#region Functions
+
 function labelmaker{
 param(
 [Parameter(Mandatory)]
@@ -134,7 +137,19 @@ if($samname.Contains("..")){$samname =  $samname.Replace("..",'.')} #ef hann hei
 if((get-aduser -Filter {samaccountname -like $samname} -Properties samaccountname) -ne $null )
 {
 $samname = $samname.Substring(0, $samname.Length -2)
-$samname += $i.ToString()
+$potential = $samname + $i.ToString()
+
+    if((get-aduser -Filter {samaccountname -like $potential} -Properties samaccountname) -ne $null )
+    {
+    $i++
+    $samname += $i.ToString()
+    }
+    else
+    {
+    $samname += $i.ToString()
+    }
+
+
 
 }
 
@@ -226,13 +241,36 @@ Import-Csv $csv -Encoding Default -Delimiter $delim
 
 }
 
+function SpecificCount
+{
+param(
+[parameter(mandatory)]$oudistname
+)
+$distnames = @()
+$users = get-aduser -Filter * -properties name
+foreach ($user in $users)
+{
+    $dname = $user.Distinguishedname
+    $dname = $dname.Split(',')
+    $dn = ""
+    for ($i = 1; $i -lt $dname.Count; $i++)
+    { 
+        $dn +=$dname[$i]+','
+    }
+    $dn = $dn.Substring(0,$dn.Length -1)
+    
+}
+
+}
+#endregion functions
+
 #region mainform og tabcontrol
 $ctrlsmainform = @()
 $tabpages = @()
 $ctrlstabpage1 = @()
 $ctrlstabpage2 = @()
 $ctrlstabpage3 = @()
-
+$ctrlstabpage4 = @()
 
 #Mainform - þetta er aðalformið sem opnast
 $mainform = New-Object System.Windows.Forms.Form
@@ -1407,12 +1445,13 @@ write-host "skref1"
          }
          
          write-host $createuserstring
-         [Scriptblock]::Create($createuserstring).Invoke()
+          [Scriptblock]::Create($createuserstring).Invoke()
+          }
  
 
      write-host "skref6.5"
     
-    }
+    
     foreach ($message in $messages)
     {
      Write-Host $message   
@@ -1433,6 +1472,122 @@ $tabpages += $tabpage3
 
 #endregion tab3
 
+#region tab4 
+$tabpage4 = New-Object System.Windows.Forms.TabPage
+$tabpage4.Text = "Notendastjórnun"
+$tabpage4.add_Enter({
+[System.GC]::Collect()
+$mainform.ClientSize = New-Object System.Drawing.Size(800,500)
+$tabcontrol.ClientSize = $mainform.ClientSize
+})
+$script:selecteduser = ""
+
+#datagrid
+$datagridnav = new-object System.Windows.Forms.DataGridView
+$datagridnav.Location = New-Object System.Drawing.Size(10,20)
+$datagridnav.Clientsize = New-Object System.Drawing.Size(340 ,200)
+$datagridnav.ColumnCount = 3
+$datagridnav.Columns[0].Name = "Nafn á OU"
+$datagridnav.Columns[1].Name = "Undirmöppur"
+$datagridnav.Columns[2].Name = "Fjöldi notenda"
+$datagridnav.SelectionMode = "FullRowSelect"
+$datagridnav.MultiSelect = $false
+$ctrlstabpage4 += $datagridnav
+function birtaou{
+$datagridnav.rows.Clear()
+$ous = Get-ADOrganizationalUnit -Filter * -Properties name, distinguishedname
+$ous | % $_{if((Get-ADOrganizationalUnit -Filter * -SearchBase $_.distinguishedname).count -ge 0){
+$count = (Get-ADOrganizationalUnit -Filter * -SearchBase $_.distinguishedname).count
+if ($count.GetType() -ne [int])
+{
+$count = 0;
+}
+else
+{
+$count = [int]$count -1
+}
+$countuser = (Get-ADUser -Filter * -SearchBase $_.distinguishedname).count
+if ($countuser.GetType() -ne [int])
+{
+$countuser = 0;
+}
+$row = @($_.Name, $count, $countuser)
+$datagridnav.Rows.Add($row)
+}}
+
+
+}
+birtaou
+$datagridnav.add_CellMouseDoubleClick({
+$selected = ""
+$selected = $datagridnav.SelectedCells[0].Value
+$datagridnav.rows.Clear()
+
+Write-Host $selected
+if((Get-ADOrganizationalUnit -Filter * -SearchScope Subtree  -Properties name | Where-Object -Property DistinguishedName -match $selected).count -ge 1)
+{
+$datagridnav.Columns[0].Name = "Nafn á OU"
+$datagridnav.Columns[1].Name = "Undirmöppur"
+$datagridnav.Columns[2].Name = "Fjöldi notenda"
+$ous = Get-ADOrganizationalUnit -Filter * | Where-Object -Property DistinguishedName -match $selected
+$ous | % {
+$count = (Get-ADOrganizationalUnit -Filter * -SearchBase $_.distinguishedname).count
+if ($count.GetType() -ne [int])
+{
+$count = 0;
+}
+else
+{
+$count = [int]$count -1
+}
+$countuser = (Get-ADUser -Filter * -SearchBase $_.distinguishedname).count
+if ($countuser.GetType() -ne [int])
+{
+$countuser = 0;
+}
+$row = @($_.Name, $count, $countuser)
+$datagridnav.Rows.Add($row)
+}
+}
+else{
+$datagridnav.Columns[0].Name = "Nafn"
+$datagridnav.Columns[1].Name = "Titill"
+$datagridnav.Columns[2].Name = "Notendanafn"
+$users = Get-ADUser -Filter * -Properties name,title,samaccountname | Where-Object DistinguishedName -Match $selected
+foreach ($u in $users)
+{
+    $row = @($u.Name, $u.Title, $u.SamAccountName)
+    $datagridnav.Rows.Add($row)  
+}
+
+}
+
+})
+
+$datagridnav.add_SelectionChanged({
+if($datagridnav.Columns[0].Name -eq "Nafn")
+{
+$script:selecteduser = $datagridnav.SelectedCells[0].Value
+Write-Host $script:selecteduser
+}
+})
+
+#label
+$labelsearch = labelmaker -text "Leitaðu af Notenda:" -location (0,230)
+$labelsearch.Size = New-Object System.Drawing.Size(150,25)
+$ctrlstabpage4 += $labelsearch
+
+#textbox
+$tbsearch = tbmaker -location (160,230) -size(140,25)
+$ctrlstabpage4 += $tbsearch
+
+foreach($item in $ctrlstabpage4){
+$tabpage4.Controls.Add($item)
+}
+$tabpages += $tabpage4
+
+#endregion tab4
+
 foreach($tab in $tabpages)
 {
 $tabcontrol.Controls.Add($tab)
@@ -1452,6 +1607,7 @@ $tooltipcontrol.SetToolTip($tab2txtadcpadd,"Sláðu inn nafn vélar")
 $tooltipcontrol.SetToolTip($cboxusername,"dæmi: Jon.jonsson")
 $tooltipcontrol.SetToolTip($cboxusername2,"dæmi: jon1")
 $tooltipcontrol.SetToolTip($cboxchangepass,"Notandi breytir password við næsta logon")
+$tooltipcontrol.SetToolTip($datagridnav,"Smellir til að velja, tvísmellir til að browse-a")
 
 
 #Byrjum þetta
