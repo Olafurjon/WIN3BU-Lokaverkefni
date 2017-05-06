@@ -1564,10 +1564,16 @@ foreach ($u in $users)
 
 })
 
+
 $datagridnav.add_SelectionChanged({
 if($datagridnav.Columns[0].Name -eq "Nafn")
 {
-$script:selecteduser = $datagridnav.SelectedCells[0].Value
+$script:selecteduser = $datagridnav.SelectedCells[2].Value
+if ($script:selecteduser -ne $null)
+{
+$duplicates = @()
+loaduser -name $script:selecteduser
+}
 Write-Host $script:selecteduser
 }
 })
@@ -1580,6 +1586,97 @@ $ctrlstabpage4 += $labelsearch
 #textbox
 $tbsearch = tbmaker -location (160,230) -size(140,25)
 $ctrlstabpage4 += $tbsearch
+
+$tbsearch.add_TextChanged({
+if($tbsearch.Text.Length -ge 2)
+{
+$datagridnav.rows.Clear()
+$datagridnav.Columns[0].Name = "Nafn"
+$datagridnav.Columns[1].Name = "Titill"
+$datagridnav.Columns[2].Name = "Notendanafn"
+$users = Get-ADUser -Filter * -Properties name,title,samaccountname | Where-Object name -Match $tbsearch.Text
+$complete = @()
+   foreach($u in $users)
+    {
+    $row = @($u.Name, $u.Title, $u.SamAccountName)
+    $datagridnav.Rows.Add($row)  
+    }
+}
+
+})
+$setusertb = @()
+$setuserlb = @()
+$setuser = get-command Set-ADUser 
+$setuserparam = $setuser.Parameters.Keys
+$parameters = @()
+$badword = @("Verbose","Credential","Debug","ErrorAction","WarningVariable","WarningAction","ErrorVariable","OutVariable","OutBuffer","PipelineVariable","Whatif","Confirm","AllowReversiblePasswordEncryption","Certificates","AuthType","TrustedForDelegation","SmartCardLogonRequired","KerberosEncryptionType","Instance","AuthenticationPolicySilo","AuthenticationPolicy","AccountNotDelegated","Passthru","Remove","TrustedForDelegation","Replace","PrincipalsAllowedToDelegateToAccount","KerberosEncryptionType","Clear","Confirm","CompoundIdentitySupported","AccountExpirationDate","Add","CannotChangePassword","ChangePasswordAtLogon","PasswordNotRequired","PasswordNeverExpires","ServicePrincipalNames","LogonWorkstations","ScriptPath")
+foreach ($key in $setuserparam)
+{
+  if($key -notin $badword)
+  {$parameters += $key}
+} 
+$y = 10
+$x = 360
+for ($i = 0; $i -lt $parameters.Count; $i++)
+{ 
+  $tb = tbmaker -size (100,25) -location(($x + 100),$y)
+  $setusertb += $tb
+  $lb = labelmaker -text "" -location ($x,$y)
+  $lb.TextAlign = "MiddleLeft"
+  $setuserlb += $lb
+  $y += 25
+  if ($i -eq 17){
+         $x = $x + 200
+         $y = 10
+     }
+}
+ 
+$i = 0
+foreach($para in $parameters){
+   
+    $setuserlb[$i].Text = $para.ToString()
+    $i++
+    
+}
+    
+function loaduser{
+    param(
+    [parameter(mandatory)]$name
+    )
+    $i = 0
+    write-host $duplicates
+    foreach($para in $parameters)
+    {
+        $result = Get-ADUser -Filter {samaccountname -like $name} -Properties * | Select-Object -Property $para
+        if($result.$para.count -ne 1)
+        {
+            if($duplicates -contains $name)
+            {
+            $setusertb[$i].Text = $result[1].$para
+            
+            }
+            else
+            {
+            $setusertb[$i].Text = $result[0].$para
+            $duplicates += $name
+            }
+        }
+        else
+        {
+            $setusertb[$i].Text = $result.$para
+        }
+    $i++
+    }
+}
+ 
+
+    $ctrlstabpage4 += $setusertb
+    $ctrlstabpage4 += $setuserlb
+    
+
+
+
+
 
 foreach($item in $ctrlstabpage4){
 $tabpage4.Controls.Add($item)
